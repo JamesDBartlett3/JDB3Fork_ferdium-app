@@ -51,11 +51,11 @@ describe('ServicesApi', () => {
     expect(server.cacheServicesFromModels).toHaveBeenCalledWith(services);
   });
 
-  it('keeps working when cache value is a non-array payload', async () => {
+  it('forwards cache read failures', async () => {
     const { api, server } = createApi();
-    server.getCachedServices.mockResolvedValue([]);
+    server.getCachedServices.mockRejectedValue(new Error('cache read failed'));
 
-    await expect(api.all()).resolves.toEqual([]);
+    await expect(api.all()).rejects.toThrow('cache read failed');
     expect(server.getCachedServices).toHaveBeenCalledTimes(1);
   });
 });

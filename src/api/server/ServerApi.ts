@@ -699,9 +699,11 @@ export default class ServerApi {
   }
 
   _extractServiceConfig(service: any) {
+    const recipeId = service.recipe?.id ?? service.recipeId;
+
     return {
       id: service.id,
-      recipeId: service.recipeId,
+      recipeId,
       name: service.name,
       order: service.order,
       team: service.team,
