@@ -1133,7 +1133,7 @@ export default class ServicesStore extends TypedStore {
   async _syncFromServer() {
     try {
       const services = await this.syncServicesRequest.execute().promise;
-      this.allServicesRequest.patch(() => services);
+      await this.allServicesRequest.patch(() => services);
       this.api.services.cacheFromModels(services);
     } catch (error) {
       debug('ServicesStore::_syncFromServer failed, using local cache', error);

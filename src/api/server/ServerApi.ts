@@ -12,7 +12,6 @@ import {
   statSync,
   writeFileSync,
 } from 'fs-extra';
-import { isEqual } from 'lodash';
 import mobxLocalStorage from 'mobx-localstorage';
 import ms from 'ms';
 import tar from 'tar';
@@ -621,83 +620,6 @@ export default class ServerApi {
         return recipe;
       }),
     ).catch(error => console.error("Can't load recipe", error));
-  }
-
-  _areServicesDifferent(cachedServices: any[], serverServices: any[]) {
-    return !isEqual(
-      [...cachedServices]
-        .map(service => this._extractServiceConfig(service))
-        .sort((a, b) => a.id.localeCompare(b.id)),
-      [...serverServices]
-        .map(service => this._extractServiceConfig(service))
-        .sort((a, b) => a.id.localeCompare(b.id)),
-    );
-  }
-
-  async _overwriteServerServices(localServices: any[], serverServices: any[]) {
-    const localById = new Map(
-      localServices.map(service => [service.id, service]),
-    );
-    const serverById = new Map(
-      serverServices.map(service => [service.id, service]),
-    );
-
-    for (const [serviceId] of serverById) {
-      if (!localById.has(serviceId)) {
-        // eslint-disable-next-line no-await-in-loop
-        await this.deleteService(serviceId);
-      }
-    }
-
-    for (const [serviceId, localService] of localById) {
-      const payload = this._extractServiceConfig(localService);
-      // eslint-disable-next-line no-await-in-loop
-      await (serverById.has(serviceId)
-        ? this.updateService(serviceId, this._toServicePayload(payload))
-        : this.createService(
-            payload.recipeId,
-            this._toServicePayload(payload),
-          ));
-    }
-
-    if (localServices.length > 0) {
-      const reorderPayload = {};
-      for (const [index, service] of [...localServices]
-        .sort((a, b) => a.order - b.order)
-        .entries()) {
-        reorderPayload[service.id] = index;
-      }
-      await this.reorderService(reorderPayload);
-    }
-  }
-
-  _toServicePayload(service: any) {
-    return {
-      name: service.name,
-      order: service.order,
-      team: service.team,
-      customUrl: service.customUrl,
-      iconUrl: service.iconUrl,
-      useFavicon: service.useFavicon,
-      isEnabled: service.isEnabled,
-      isNotificationEnabled: service.isNotificationEnabled,
-      isBadgeEnabled: service.isBadgeEnabled,
-      isMediaBadgeEnabled: service.isMediaBadgeEnabled,
-      trapLinkClicks: service.trapLinkClicks,
-      isIndirectMessageBadgeEnabled: service.isIndirectMessageBadgeEnabled,
-      isMuted: service.isMuted,
-      isDarkModeEnabled: service.isDarkModeEnabled,
-      darkReaderSettings: service.darkReaderSettings,
-      isProgressbarEnabled: service.isProgressbarEnabled,
-      spellcheckerLanguage: service.spellcheckerLanguage,
-      userAgentPref: service.userAgentPref,
-      isHibernationEnabled: service.isHibernationEnabled,
-      isWakeUpEnabled: service.isWakeUpEnabled,
-      onlyShowFavoritesInUnreadCount: service.onlyShowFavoritesInUnreadCount,
-      proxy: service.proxy,
-      customIconUrl: service.customIconUrl,
-      hasCustomUploadedIcon: service.hasCustomUploadedIcon,
-    };
   }
 
   _extractServiceConfig(service: any) {

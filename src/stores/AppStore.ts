@@ -224,7 +224,14 @@ export default class AppStore extends TypedStore {
     if (this.fetchDataInterval !== null) {
       clearInterval(this.fetchDataInterval);
     }
-    this.fetchDataInterval = null;
+    this.fetchDataInterval = setInterval(() => {
+      this.stores.user.getUserInfoRequest.invalidate({
+        immediately: true,
+      });
+      this.stores.features.featuresRequest.invalidate({
+        immediately: true,
+      });
+    }, ms('60m'));
 
     // Check for updates once every 4 hours
     setInterval(() => this._checkForUpdates(), CHECK_INTERVAL);
