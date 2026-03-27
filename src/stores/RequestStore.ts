@@ -78,6 +78,7 @@ export default class RequestStore extends TypedStore {
 
   @action _retryRequiredRequests(): void {
     this.userInfoRequest.reload();
+    this.servicesRequest.reload();
     this.stores.services._syncFromServer();
   }
 
