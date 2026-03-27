@@ -12,6 +12,7 @@ import {
   statSync,
   writeFileSync,
 } from 'fs-extra';
+import { isEqual } from 'lodash';
 import ms from 'ms';
 import tar from 'tar';
 
@@ -47,6 +48,11 @@ const debug = require('../../preload-safe-debug')('Ferdium:ServerApi');
 module.paths.unshift(getDevRecipeDirectory(), getRecipeDirectory());
 
 const SERVICES_CACHE_KEY = 'ferdium-services-cache-v1';
+
+interface ServiceCreatePayload {
+  iconFile?: any;
+  [key: string]: any;
+}
 
 export default class ServerApi {
   recipePreviews: IRecipePreview[] = [];
@@ -218,7 +224,7 @@ export default class ServerApi {
     let resolvedServices = data;
     if (
       cachedServices.length > 0 &&
-      this._servicesDiffer(cachedServices, data) &&
+      this._areServicesDifferent(cachedServices, data) &&
       // eslint-disable-next-line no-alert
       window.confirm(
         'Ferdium detected differences between your local cached services and the server profile. Click OK to keep local cached services, or Cancel to keep the server profile.',
@@ -248,7 +254,8 @@ export default class ServerApi {
       return JSON.parse(
         window.localStorage.getItem(SERVICES_CACHE_KEY) || '[]',
       );
-    } catch {
+    } catch (error) {
+      debug('ServerApi::getCachedServicesRaw parse error', error);
       return [];
     }
   }
@@ -263,7 +270,7 @@ export default class ServerApi {
     );
   }
 
-  async createService(recipeId: string, data: any) {
+  async createService(recipeId: string, data: ServiceCreatePayload) {
     const request = await sendAuthRequest(`${apiBase()}/service`, {
       method: 'POST',
       body: JSON.stringify({ recipeId, ...data }),
@@ -613,18 +620,14 @@ export default class ServerApi {
     ).catch(error => console.error("Can't load recipe", error));
   }
 
-  _servicesDiffer(cachedServices: any[], serverServices: any[]) {
-    return (
-      JSON.stringify(
-        [...cachedServices]
-          .map(service => this._extractServiceConfig(service))
-          .sort((a, b) => a.id.localeCompare(b.id)),
-      ) !==
-      JSON.stringify(
-        [...serverServices]
-          .map(service => this._extractServiceConfig(service))
-          .sort((a, b) => a.id.localeCompare(b.id)),
-      )
+  _areServicesDifferent(cachedServices: any[], serverServices: any[]) {
+    return !isEqual(
+      [...cachedServices]
+        .map(service => this._extractServiceConfig(service))
+        .sort((a, b) => a.id.localeCompare(b.id)),
+      [...serverServices]
+        .map(service => this._extractServiceConfig(service))
+        .sort((a, b) => a.id.localeCompare(b.id)),
     );
   }
 

@@ -221,6 +221,9 @@ export default class AppStore extends TypedStore {
     this._systemDND();
     setInterval(() => this._systemDND(), ms('5s'));
 
+    if (this.fetchDataInterval !== null) {
+      clearInterval(this.fetchDataInterval);
+    }
     this.fetchDataInterval = null;
 
     // Check for updates once every 4 hours

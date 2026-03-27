@@ -1125,14 +1125,19 @@ export default class ServicesStore extends TypedStore {
     this.api.services.cacheFromModels(services);
   }
 
-  _queuePersistServicesCache() {
-    setTimeout(() => this._persistServicesCache(), 0);
-  }
+  _queuePersistServicesCache: () => void = debounce(
+    this._persistServicesCache.bind(this),
+    ms('100ms'),
+  );
 
   async _syncFromServer() {
-    const services = await this.syncServicesRequest.execute().promise;
-    this.allServicesRequest.patch(() => services);
-    this._persistServicesCache();
+    try {
+      const services = await this.syncServicesRequest.execute().promise;
+      this.allServicesRequest.patch(() => services);
+      this._persistServicesCache();
+    } catch (error) {
+      debug('ServicesStore::_syncFromServer failed, using local cache', error);
+    }
   }
 
   @action _toggleNotifications({ serviceId }) {

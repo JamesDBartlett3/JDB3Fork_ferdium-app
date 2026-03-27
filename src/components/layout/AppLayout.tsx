@@ -45,7 +45,7 @@ const messages = defineMessages({
   servicesSyncFailed: {
     id: 'infobar.servicesSyncFailed',
     defaultMessage:
-      'Could not sync your services from the server. Ferdium is using your local cached services.',
+      'Unable to sync services with the server. Using locally cached services.',
   },
   authRequestFailed: {
     id: 'infobar.authRequestFailed',
