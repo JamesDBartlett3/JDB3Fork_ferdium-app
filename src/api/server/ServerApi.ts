@@ -253,6 +253,7 @@ export default class ServerApi {
       return [];
     } catch (error) {
       debug('ServerApi::getCachedServicesRaw parse error', error);
+      window.localStorage.removeItem(SERVICES_CACHE_KEY);
       window.localStorage.removeItem(cacheKey);
       return [];
     }
