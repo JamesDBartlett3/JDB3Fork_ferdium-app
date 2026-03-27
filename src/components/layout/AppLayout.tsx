@@ -47,6 +47,15 @@ const messages = defineMessages({
     defaultMessage:
       'Unable to sync services with the server. Using locally cached services.',
   },
+  servicesSyncConflict: {
+    id: 'infobar.servicesSyncConflict',
+    defaultMessage:
+      'Service changes differ between local cache and server. Choose whether to keep local services or use the server version.',
+  },
+  buttonUseServerVersion: {
+    id: 'infobar.buttonUseServerVersion',
+    defaultMessage: 'Use server version',
+  },
   authRequestFailed: {
     id: 'infobar.authRequestFailed',
     defaultMessage:
@@ -100,6 +109,9 @@ interface IProps extends WrappedComponentProps, WithStylesProps<typeof styles> {
   retryRequiredRequests: () => void;
   areRequiredRequestsLoading: boolean;
   isServicesSyncFailed: boolean;
+  hasPendingSyncConflict: boolean;
+  applyPendingServerSync: () => void;
+  dismissPendingServerSync: () => void;
 }
 
 interface IState {
@@ -135,6 +147,9 @@ class AppLayout extends Component<PropsWithChildren<IProps>, IState> {
       retryRequiredRequests,
       areRequiredRequestsLoading,
       isServicesSyncFailed,
+      hasPendingSyncConflict,
+      applyPendingServerSync,
+      dismissPendingServerSync,
       updateVersion,
       isUpdateAvailable,
     } = this.props;
@@ -203,6 +218,18 @@ class AppLayout extends Component<PropsWithChildren<IProps>, IState> {
                   >
                     <Icon icon={mdiFlash} />
                     {intl.formatMessage(messages.servicesSyncFailed)}
+                  </InfoBar>
+                )}
+                {hasPendingSyncConflict && (
+                  <InfoBar
+                    type="warning"
+                    ctaLabel={intl.formatMessage(messages.buttonUseServerVersion)}
+                    sticky={false}
+                    onClick={applyPendingServerSync}
+                    onHide={dismissPendingServerSync}
+                  >
+                    <Icon icon={mdiFlash} />
+                    {intl.formatMessage(messages.servicesSyncConflict)}
                   </InfoBar>
                 )}
                 {automaticUpdates &&

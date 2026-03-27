@@ -21,6 +21,7 @@ import { SPELLCHECKER_LOCALES } from '../i18n/languages';
 import { cleanseJSObject } from '../jsUtils';
 import type { UnreadServices } from '../lib/dbus/Ferdium';
 import type Service from '../models/Service';
+import { hasServicesSyncConflict } from './utils/services-sync-conflict';
 import CachedRequest from './lib/CachedRequest';
 import Request from './lib/Request';
 import TypedStore from './lib/TypedStore';
@@ -69,6 +70,8 @@ export default class ServicesStore extends TypedStore {
   // [0] => Most recent, [n] => Least recent
   // No service ID should be in the list multiple times, not all service IDs have to be in the list
   @observable lastUsedServices: string[] = [];
+
+  @observable pendingServerSyncServices: Service[] | null = null;
 
   private toggleToTalkCallback = () => this.active?.toggleToTalk();
 
@@ -443,6 +446,10 @@ export default class ServicesStore extends TypedStore {
         service => service.isTodosService && service.isEnabled,
       ) ?? false
     );
+  }
+
+  @computed get hasPendingSyncConflict() {
+    return !!this.pendingServerSyncServices;
   }
 
   @computed get isTodosServiceActive() {
@@ -1132,12 +1139,35 @@ export default class ServicesStore extends TypedStore {
 
   async _syncFromServer() {
     try {
-      const services = await this.syncServicesRequest.execute().promise;
-      await this.allServicesRequest.patch(() => services);
-      this.api.services.cacheFromModels(services);
+      const serverServices = await this.syncServicesRequest.execute().promise;
+      const localServices = this.allServicesRequest.result || [];
+
+      if (hasServicesSyncConflict(localServices, serverServices)) {
+        this.pendingServerSyncServices = serverServices;
+        return;
+      }
+
+      await this.allServicesRequest.patch(() => serverServices);
+      this.api.services.cacheFromModels(serverServices);
+      this.pendingServerSyncServices = null;
     } catch (error) {
       debug('ServicesStore::_syncFromServer failed, using local cache', error);
     }
+  }
+
+  @action async applyPendingServerSync() {
+    if (!this.pendingServerSyncServices) {
+      return;
+    }
+
+    const pendingServices = this.pendingServerSyncServices;
+    await this.allServicesRequest.patch(() => pendingServices);
+    this.api.services.cacheFromModels(pendingServices);
+    this.pendingServerSyncServices = null;
+  }
+
+  @action dismissPendingServerSync() {
+    this.pendingServerSyncServices = null;
   }
 
   @action _toggleNotifications({ serviceId }) {

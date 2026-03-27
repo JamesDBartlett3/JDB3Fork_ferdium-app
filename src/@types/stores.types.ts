@@ -228,6 +228,9 @@ interface ServicesStore extends TypedStore {
   filtered: () => void;
   isTodosServiceActive: () => void;
   isTodosServiceAdded: () => void;
+  hasPendingSyncConflict: boolean;
+  applyPendingServerSync: () => Promise<void>;
+  dismissPendingServerSync: () => void;
   _syncFromServer: () => Promise<void>;
 }
 
