@@ -22,21 +22,22 @@ const createApi = () => {
 };
 
 describe('ServicesApi', () => {
-  it('loads services from cache by default', () => {
+  it('loads services from cache by default', async () => {
     const { api, server } = createApi();
-    server.getCachedServices.mockReturnValue([{ id: 'cache-1' }]);
+    server.getCachedServices.mockResolvedValue([{ id: 'cache-1' }]);
 
-    const result = api.all();
+    const result = await api.all();
 
     expect(server.getCachedServices).toHaveBeenCalledTimes(1);
     expect(server.getServices).not.toHaveBeenCalled();
     expect(result).toEqual([{ id: 'cache-1' }]);
   });
 
-  it('syncs services from server when requested', () => {
+  it('syncs services from server when requested', async () => {
     const { api, server } = createApi();
+    server.getServices.mockResolvedValue([]);
 
-    api.sync();
+    await api.sync();
 
     expect(server.getServices).toHaveBeenCalledTimes(1);
   });
