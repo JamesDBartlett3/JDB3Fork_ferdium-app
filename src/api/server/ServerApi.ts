@@ -251,9 +251,17 @@ export default class ServerApi {
 
   getCachedServicesRaw() {
     try {
-      return JSON.parse(
+      const parsed = JSON.parse(
         window.localStorage.getItem(SERVICES_CACHE_KEY) || '[]',
       );
+
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+
+      debug('ServerApi::getCachedServicesRaw invalid cache format, resetting');
+      window.localStorage.removeItem(SERVICES_CACHE_KEY);
+      return [];
     } catch (error) {
       debug('ServerApi::getCachedServicesRaw parse error', error);
       return [];

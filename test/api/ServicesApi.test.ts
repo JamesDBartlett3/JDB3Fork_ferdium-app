@@ -50,4 +50,12 @@ describe('ServicesApi', () => {
 
     expect(server.cacheServicesFromModels).toHaveBeenCalledWith(services);
   });
+
+  it('keeps working when cache value is a non-array payload', async () => {
+    const { api, server } = createApi();
+    server.getCachedServices.mockResolvedValue([]);
+
+    await expect(api.all()).resolves.toEqual([]);
+    expect(server.getCachedServices).toHaveBeenCalledTimes(1);
+  });
 });
