@@ -1,6 +1,7 @@
 /* eslint-disable import/no-import-module-exports */
 /* eslint-disable global-require */
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import {
   type PathOrFileDescriptor,
   copySync,
@@ -238,21 +239,40 @@ export default class ServerApi {
   }
 
   getCachedServicesRaw() {
-    const cacheKey = this._getServicesCacheKey();
+    const authToken = this._getAuthToken();
+    const cacheKey = this._getServicesCacheKey(authToken);
+    const legacyCacheKey = this._getLegacyServicesCacheKey(authToken);
+    const scopedCachedValue = window.localStorage.getItem(cacheKey);
+    const legacyCachedValue = window.localStorage.getItem(legacyCacheKey);
 
     try {
-      const parsed = JSON.parse(window.localStorage.getItem(cacheKey) || '[]');
+      const cachedValue = this._selectCachedServicesValue(
+        scopedCachedValue,
+        legacyCachedValue,
+      );
+      const parsed = JSON.parse(cachedValue);
 
       if (Array.isArray(parsed)) {
+        // Migrate old token-scoped key to hashed token key once data is read.
+        if (
+          cacheKey !== legacyCacheKey &&
+          !scopedCachedValue &&
+          legacyCachedValue
+        ) {
+          window.localStorage.setItem(cacheKey, JSON.stringify(parsed));
+          window.localStorage.removeItem(legacyCacheKey);
+        }
         return parsed;
       }
 
       debug('ServerApi::getCachedServicesRaw invalid cache format, resetting');
-      window.localStorage.removeItem(cacheKey);
+      [...new Set([cacheKey, legacyCacheKey])].forEach(key =>
+        window.localStorage.removeItem(key),
+      );
       return [];
     } catch (error) {
       debug('ServerApi::getCachedServicesRaw parse error', error);
-      [...new Set([SERVICES_CACHE_KEY_PREFIX, cacheKey])].forEach(key =>
+      [...new Set([SERVICES_CACHE_KEY_PREFIX, cacheKey, legacyCacheKey])].forEach(key =>
         window.localStorage.removeItem(key),
       );
       return [];
@@ -708,15 +728,37 @@ export default class ServerApi {
     }
   }
 
-  _getServicesCacheKey() {
-    const authToken =
+  _getAuthToken() {
+    return (
       mobxLocalStorage.getItem('authToken') ||
-      window.localStorage.getItem('authToken');
+      window.localStorage.getItem('authToken')
+    );
+  }
 
+  _getServicesCacheKey(authToken = this._getAuthToken()) {
+    if (!authToken) {
+      return SERVICES_CACHE_KEY_PREFIX;
+    }
+
+    const tokenHash = createHash('sha256')
+      .update(`${SERVICES_CACHE_KEY_PREFIX}:${authToken}`)
+      .digest('hex');
+
+    return `${SERVICES_CACHE_KEY_PREFIX}:${tokenHash}`;
+  }
+
+  _getLegacyServicesCacheKey(authToken = this._getAuthToken()) {
     if (!authToken) {
       return SERVICES_CACHE_KEY_PREFIX;
     }
 
     return `${SERVICES_CACHE_KEY_PREFIX}:${authToken}`;
+  }
+
+  _selectCachedServicesValue(
+    scopedCachedValue: string | null,
+    legacyCachedValue: string | null,
+  ) {
+    return scopedCachedValue || legacyCachedValue || '[]';
   }
 }

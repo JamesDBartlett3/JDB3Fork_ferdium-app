@@ -79,6 +79,15 @@ export default class RequestStore extends TypedStore {
   @action _retryRequiredRequests(): void {
     this.userInfoRequest.reload();
     this.servicesRequest.reload();
+    this._triggerServerSync();
+  }
+
+  @action _retryRequiredRequestsCacheOnly(): void {
+    this.userInfoRequest.reload();
+    this.servicesRequest.reload();
+  }
+
+  @action _triggerServerSync(): void {
     this.stores.services._syncFromServer();
   }
 
@@ -97,7 +106,7 @@ export default class RequestStore extends TypedStore {
     if (!this.areRequiredRequestsSuccessful && this.stores.user.isLoggedIn) {
       setTimeout(() => {
         this.retries += 1;
-        this._retryRequiredRequests();
+        this._retryRequiredRequestsCacheOnly();
         if (this.retries === 4) {
           this.showRequiredRequestsError = true;
         }

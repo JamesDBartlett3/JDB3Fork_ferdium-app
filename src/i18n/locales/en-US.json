@@ -92,6 +92,7 @@
   "infobar.hide": "Hide",
   "infobar.isSnapMessage": "Please update via Snap Store.",
   "infobar.requiredRequestsFailed": "Could not load services and user information",
+  "infobar.servicesSyncFailed": "Unable to sync services with the server. Using locally cached services.",
   "infobar.servicesUpdated": "Your services have been updated.",
   "infobar.updateAvailable": "A new update for Ferdium is available.",
   "infobox.dismiss": "Dismiss",
