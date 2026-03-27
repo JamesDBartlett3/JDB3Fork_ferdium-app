@@ -181,9 +181,9 @@ interface RequestsStore extends TypedStore {
   retries: number;
   retryDelay: number;
   syncServicesRequest: Request;
-  servicesRequest: () => void;
-  showRequiredRequestsError: () => void;
-  userInfoRequest: () => void;
+  servicesRequest: CachedRequest;
+  showRequiredRequestsError: boolean;
+  userInfoRequest: CachedRequest;
   areRequiredRequestsLoading: boolean;
   areRequiredRequestsSuccessful: boolean;
   isServicesSyncFailed: boolean;
