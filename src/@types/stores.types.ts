@@ -180,11 +180,13 @@ interface RequestsStore extends TypedStore {
   localServerToken: string | undefined;
   retries: number;
   retryDelay: number;
+  syncServicesRequest: Request;
   servicesRequest: () => void;
   showRequiredRequestsError: () => void;
   userInfoRequest: () => void;
   areRequiredRequestsLoading: () => void;
   areRequiredRequestsSuccessful: () => void;
+  isServicesSyncFailed: () => void;
 }
 
 interface RouterStore {
@@ -211,6 +213,7 @@ interface ServicesStore extends TypedStore {
   createServiceRequest: CachedRequest;
   deleteServiceRequest: () => void;
   allServicesRequest: CachedRequest;
+  syncServicesRequest: Request;
   filterNeedle: string;
   lastUsedServices: () => void;
   reorderServicesRequest: () => void;

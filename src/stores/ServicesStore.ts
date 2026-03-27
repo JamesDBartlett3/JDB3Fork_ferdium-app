@@ -33,6 +33,8 @@ export default class ServicesStore extends TypedStore {
     'all',
   );
 
+  @observable syncServicesRequest: Request = new Request(this.api.services, 'sync');
+
   @observable createServiceRequest: Request = new Request(
     this.api.services,
     'create',
@@ -152,6 +154,10 @@ export default class ServicesStore extends TypedStore {
   }
 
   setup() {
+    if (this.stores.user.isLoggedIn) {
+      this.syncServicesRequest.execute();
+    }
+
     // Single key reactions for the sake of your CPU
     reaction(
       () => this.stores.settings.app.enableSpellchecking,
@@ -494,6 +500,7 @@ export default class ServicesStore extends TypedStore {
       if (!result) return;
       result.push(response.data);
     });
+    this._persistServicesCache();
 
     this.actions.settings.update({
       type: 'proxy',
@@ -572,6 +579,7 @@ export default class ServicesStore extends TypedStore {
         newData,
       );
     });
+    this._persistServicesCache();
 
     await request.promise;
     this.actionStatus = request.result.status;
@@ -606,6 +614,7 @@ export default class ServicesStore extends TypedStore {
     this.allServicesRequest.patch((result: Service[]) => {
       remove(result, (c: Service) => c.id === serviceId);
     });
+    this._persistServicesCache();
 
     await request.promise;
     this.actionStatus = request.result.status;
@@ -1104,6 +1113,12 @@ export default class ServicesStore extends TypedStore {
         s.order = services[s.id];
       }
     });
+    this._persistServicesCache();
+  }
+
+  _persistServicesCache() {
+    const services = this.allServicesRequest.result || [];
+    this.api.services.cacheFromModels(services);
   }
 
   @action _toggleNotifications({ serviceId }) {

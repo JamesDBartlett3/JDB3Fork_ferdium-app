@@ -42,6 +42,11 @@ const messages = defineMessages({
     id: 'infobar.requiredRequestsFailed',
     defaultMessage: 'Could not load services and user information',
   },
+  servicesSyncFailed: {
+    id: 'infobar.servicesSyncFailed',
+    defaultMessage:
+      'Could not sync your services from the server. Ferdium is using your local cached services.',
+  },
   authRequestFailed: {
     id: 'infobar.authRequestFailed',
     defaultMessage:
@@ -94,6 +99,7 @@ interface IProps extends WrappedComponentProps, WithStylesProps<typeof styles> {
   areRequiredRequestsSuccessful: boolean;
   retryRequiredRequests: () => void;
   areRequiredRequestsLoading: boolean;
+  isServicesSyncFailed: boolean;
 }
 
 interface IState {
@@ -128,6 +134,7 @@ class AppLayout extends Component<PropsWithChildren<IProps>, IState> {
       areRequiredRequestsSuccessful,
       retryRequiredRequests,
       areRequiredRequestsLoading,
+      isServicesSyncFailed,
       updateVersion,
       isUpdateAvailable,
     } = this.props;
@@ -184,6 +191,18 @@ class AppLayout extends Component<PropsWithChildren<IProps>, IState> {
                   >
                     <Icon icon={mdiFlash} />
                     {intl.formatMessage(messages.authRequestFailed)}
+                  </InfoBar>
+                )}
+                {isServicesSyncFailed && (
+                  <InfoBar
+                    type="primary"
+                    ctaLabel="Retry sync"
+                    ctaLoading={areRequiredRequestsLoading}
+                    sticky
+                    onClick={retryRequiredRequests}
+                  >
+                    <Icon icon={mdiFlash} />
+                    {intl.formatMessage(messages.servicesSyncFailed)}
                   </InfoBar>
                 )}
                 {automaticUpdates &&

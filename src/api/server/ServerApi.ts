@@ -46,6 +46,8 @@ const debug = require('../../preload-safe-debug')('Ferdium:ServerApi');
 
 module.paths.unshift(getDevRecipeDirectory(), getRecipeDirectory());
 
+const SERVICES_CACHE_KEY = 'ferdium-services-cache-v1';
+
 export default class ServerApi {
   recipePreviews: IRecipePreview[] = [];
 
@@ -206,16 +208,56 @@ export default class ServerApi {
       throw new Error('Server not loaded');
     }
 
+    const cachedServices = this.getCachedServicesRaw();
     const request = await sendAuthRequest(`${apiBase()}/me/services`);
     if (!request.ok) {
       throw new Error(request.statusText);
     }
     const data = await request.json();
 
-    const services = await this._mapServiceModels(data);
+    let resolvedServices = data;
+    if (
+      cachedServices.length > 0 &&
+      this._servicesDiffer(cachedServices, data) &&
+      window.confirm(
+        'Ferdium detected differences between your local cached services and the server profile. Click OK to keep local cached services, or Cancel to keep the server profile.',
+      )
+    ) {
+      resolvedServices = cachedServices;
+      await this._overwriteServerServices(cachedServices, data);
+    }
+
+    this.setCachedServicesRaw(resolvedServices);
+
+    const services = await this._mapServiceModels(resolvedServices);
     const filteredServices = services.filter(service => !!service);
     debug('ServerApi::getServices resolves', filteredServices);
     return filteredServices;
+  }
+
+  async getCachedServices() {
+    const data = this.getCachedServicesRaw();
+    if (!data.length) return [];
+    const services = await this._mapServiceModels(data);
+    return services.filter(service => !!service);
+  }
+
+  getCachedServicesRaw() {
+    try {
+      return JSON.parse(window.localStorage.getItem(SERVICES_CACHE_KEY) || '[]');
+    } catch {
+      return [];
+    }
+  }
+
+  setCachedServicesRaw(services: any[]) {
+    window.localStorage.setItem(SERVICES_CACHE_KEY, JSON.stringify(services));
+  }
+
+  cacheServicesFromModels(services: ServiceModel[]) {
+    this.setCachedServicesRaw(
+      services.map(service => this._extractServiceConfig(service)),
+    );
   }
 
   async createService(recipeId: string, data: { iconFile: any }) {
@@ -566,6 +608,107 @@ export default class ServerApi {
         return recipe;
       }),
     ).catch(error => console.error("Can't load recipe", error));
+  }
+
+  _servicesDiffer(cachedServices: any[], serverServices: any[]) {
+    return (
+      JSON.stringify(
+        [...cachedServices]
+          .map(service => this._extractServiceConfig(service))
+          .sort((a, b) => a.id.localeCompare(b.id)),
+      ) !==
+      JSON.stringify(
+        [...serverServices]
+          .map(service => this._extractServiceConfig(service))
+          .sort((a, b) => a.id.localeCompare(b.id)),
+      )
+    );
+  }
+
+  async _overwriteServerServices(localServices: any[], serverServices: any[]) {
+    const localById = new Map(localServices.map(service => [service.id, service]));
+    const serverById = new Map(
+      serverServices.map(service => [service.id, service]),
+    );
+
+    for (const [serviceId] of serverById) {
+      if (!localById.has(serviceId)) {
+        // eslint-disable-next-line no-await-in-loop
+        await this.deleteService(serviceId);
+      }
+    }
+
+    for (const [serviceId, localService] of localById) {
+      const payload = this._extractServiceConfig(localService);
+      if (!serverById.has(serviceId)) {
+        // eslint-disable-next-line no-await-in-loop
+        await this.createService(payload.recipeId, this._toServicePayload(payload));
+        continue;
+      }
+
+      // eslint-disable-next-line no-await-in-loop
+      await this.updateService(serviceId, this._toServicePayload(payload));
+    }
+  }
+
+  _toServicePayload(service: any) {
+    return {
+      name: service.name,
+      order: service.order,
+      team: service.team,
+      customUrl: service.customUrl,
+      iconUrl: service.iconUrl,
+      useFavicon: service.useFavicon,
+      isEnabled: service.isEnabled,
+      isNotificationEnabled: service.isNotificationEnabled,
+      isBadgeEnabled: service.isBadgeEnabled,
+      isMediaBadgeEnabled: service.isMediaBadgeEnabled,
+      trapLinkClicks: service.trapLinkClicks,
+      isIndirectMessageBadgeEnabled: service.isIndirectMessageBadgeEnabled,
+      isMuted: service.isMuted,
+      isDarkModeEnabled: service.isDarkModeEnabled,
+      darkReaderSettings: service.darkReaderSettings,
+      isProgressbarEnabled: service.isProgressbarEnabled,
+      spellcheckerLanguage: service.spellcheckerLanguage,
+      userAgentPref: service.userAgentPref,
+      isHibernationEnabled: service.isHibernationEnabled,
+      isWakeUpEnabled: service.isWakeUpEnabled,
+      onlyShowFavoritesInUnreadCount: service.onlyShowFavoritesInUnreadCount,
+      proxy: service.proxy,
+      customIconUrl: service.customIconUrl,
+      hasCustomUploadedIcon: service.hasCustomUploadedIcon,
+    };
+  }
+
+  _extractServiceConfig(service: any) {
+    return {
+      id: service.id,
+      recipeId: service.recipeId,
+      name: service.name,
+      order: service.order,
+      team: service.team,
+      customUrl: service.customUrl,
+      iconUrl: service.iconUrl,
+      useFavicon: service.useFavicon,
+      isEnabled: service.isEnabled,
+      isNotificationEnabled: service.isNotificationEnabled,
+      isBadgeEnabled: service.isBadgeEnabled,
+      isMediaBadgeEnabled: service.isMediaBadgeEnabled,
+      trapLinkClicks: service.trapLinkClicks,
+      isIndirectMessageBadgeEnabled: service.isIndirectMessageBadgeEnabled,
+      isMuted: service.isMuted,
+      isDarkModeEnabled: service.isDarkModeEnabled,
+      darkReaderSettings: service.darkReaderSettings,
+      isProgressbarEnabled: service.isProgressbarEnabled,
+      spellcheckerLanguage: service.spellcheckerLanguage,
+      userAgentPref: service.userAgentPref,
+      isHibernationEnabled: service.isHibernationEnabled,
+      isWakeUpEnabled: service.isWakeUpEnabled,
+      onlyShowFavoritesInUnreadCount: service.onlyShowFavoritesInUnreadCount,
+      proxy: service.proxy,
+      customIconUrl: service.customIconUrl,
+      hasCustomUploadedIcon: service.hasCustomUploadedIcon,
+    };
   }
 
   _mapRecipePreviewModel(recipes: IRecipePreview[]) {
