@@ -228,6 +228,7 @@ interface ServicesStore extends TypedStore {
   filtered: () => void;
   isTodosServiceActive: () => void;
   isTodosServiceAdded: () => void;
+  _syncFromServer: () => Promise<void>;
 }
 
 // TODO: Create actual type based on the default config in config.ts

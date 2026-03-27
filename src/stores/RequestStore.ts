@@ -61,7 +61,9 @@ export default class RequestStore extends TypedStore {
   }
 
   @computed get areRequiredRequestsLoading(): boolean {
-    return this.userInfoRequest.isExecuting || this.syncServicesRequest.isExecuting;
+    return (
+      this.userInfoRequest.isExecuting || this.syncServicesRequest.isExecuting
+    );
   }
 
   @computed get isServicesSyncFailed(): boolean {
@@ -78,7 +80,7 @@ export default class RequestStore extends TypedStore {
 
   @action _retryRequiredRequests(): void {
     this.userInfoRequest.reload();
-    this.stores.services.syncServicesRequest.execute();
+    this.stores.services._syncFromServer();
   }
 
   @action setData(data: { port: number; token: string | undefined }): void {

@@ -219,6 +219,7 @@ export default class ServerApi {
     if (
       cachedServices.length > 0 &&
       this._servicesDiffer(cachedServices, data) &&
+      // eslint-disable-next-line no-alert
       window.confirm(
         'Ferdium detected differences between your local cached services and the server profile. Click OK to keep local cached services, or Cancel to keep the server profile.',
       )
@@ -237,14 +238,16 @@ export default class ServerApi {
 
   async getCachedServices() {
     const data = this.getCachedServicesRaw();
-    if (!data.length) return [];
+    if (data.length === 0) return [];
     const services = await this._mapServiceModels(data);
     return services.filter(service => !!service);
   }
 
   getCachedServicesRaw() {
     try {
-      return JSON.parse(window.localStorage.getItem(SERVICES_CACHE_KEY) || '[]');
+      return JSON.parse(
+        window.localStorage.getItem(SERVICES_CACHE_KEY) || '[]',
+      );
     } catch {
       return [];
     }
@@ -260,7 +263,7 @@ export default class ServerApi {
     );
   }
 
-  async createService(recipeId: string, data: { iconFile: any }) {
+  async createService(recipeId: string, data: any) {
     const request = await sendAuthRequest(`${apiBase()}/service`, {
       method: 'POST',
       body: JSON.stringify({ recipeId, ...data }),
@@ -626,7 +629,9 @@ export default class ServerApi {
   }
 
   async _overwriteServerServices(localServices: any[], serverServices: any[]) {
-    const localById = new Map(localServices.map(service => [service.id, service]));
+    const localById = new Map(
+      localServices.map(service => [service.id, service]),
+    );
     const serverById = new Map(
       serverServices.map(service => [service.id, service]),
     );
@@ -640,14 +645,23 @@ export default class ServerApi {
 
     for (const [serviceId, localService] of localById) {
       const payload = this._extractServiceConfig(localService);
-      if (!serverById.has(serviceId)) {
-        // eslint-disable-next-line no-await-in-loop
-        await this.createService(payload.recipeId, this._toServicePayload(payload));
-        continue;
-      }
-
       // eslint-disable-next-line no-await-in-loop
-      await this.updateService(serviceId, this._toServicePayload(payload));
+      await (serverById.has(serviceId)
+        ? this.updateService(serviceId, this._toServicePayload(payload))
+        : this.createService(
+            payload.recipeId,
+            this._toServicePayload(payload),
+          ));
+    }
+
+    if (localServices.length > 0) {
+      const reorderPayload = {};
+      for (const [index, service] of [...localServices]
+        .sort((a, b) => a.order - b.order)
+        .entries()) {
+        reorderPayload[service.id] = index;
+      }
+      await this.reorderService(reorderPayload);
     }
   }
 

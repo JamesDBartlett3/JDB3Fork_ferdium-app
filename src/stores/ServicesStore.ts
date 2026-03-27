@@ -33,7 +33,10 @@ export default class ServicesStore extends TypedStore {
     'all',
   );
 
-  @observable syncServicesRequest: Request = new Request(this.api.services, 'sync');
+  @observable syncServicesRequest: Request = new Request(
+    this.api.services,
+    'sync',
+  );
 
   @observable createServiceRequest: Request = new Request(
     this.api.services,
@@ -155,7 +158,7 @@ export default class ServicesStore extends TypedStore {
 
   setup() {
     if (this.stores.user.isLoggedIn) {
-      this.syncServicesRequest.execute();
+      this._syncFromServer();
     }
 
     // Single key reactions for the sake of your CPU
@@ -500,7 +503,7 @@ export default class ServicesStore extends TypedStore {
       if (!result) return;
       result.push(response.data);
     });
-    this._persistServicesCache();
+    this._queuePersistServicesCache();
 
     this.actions.settings.update({
       type: 'proxy',
@@ -579,7 +582,7 @@ export default class ServicesStore extends TypedStore {
         newData,
       );
     });
-    this._persistServicesCache();
+    this._queuePersistServicesCache();
 
     await request.promise;
     this.actionStatus = request.result.status;
@@ -614,7 +617,7 @@ export default class ServicesStore extends TypedStore {
     this.allServicesRequest.patch((result: Service[]) => {
       remove(result, (c: Service) => c.id === serviceId);
     });
-    this._persistServicesCache();
+    this._queuePersistServicesCache();
 
     await request.promise;
     this.actionStatus = request.result.status;
@@ -1108,17 +1111,28 @@ export default class ServicesStore extends TypedStore {
     }
 
     this.reorderServicesRequest.execute(services);
-    this.allServicesRequest.patch((data: Service[]) => {
-      for (const s of data) {
-        s.order = services[s.id];
-      }
-    });
-    this._persistServicesCache();
+    this.allServicesRequest
+      .patch((data: Service[]) => {
+        for (const s of data) {
+          s.order = services[s.id];
+        }
+      })
+      .then(() => this._persistServicesCache());
   }
 
   _persistServicesCache() {
     const services = this.allServicesRequest.result || [];
     this.api.services.cacheFromModels(services);
+  }
+
+  _queuePersistServicesCache() {
+    setTimeout(() => this._persistServicesCache(), 0);
+  }
+
+  async _syncFromServer() {
+    const services = await this.syncServicesRequest.execute().promise;
+    this.allServicesRequest.patch(() => services);
+    this._persistServicesCache();
   }
 
   @action _toggleNotifications({ serviceId }) {
