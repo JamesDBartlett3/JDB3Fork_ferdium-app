@@ -184,9 +184,9 @@ interface RequestsStore extends TypedStore {
   servicesRequest: () => void;
   showRequiredRequestsError: () => void;
   userInfoRequest: () => void;
-  areRequiredRequestsLoading: () => void;
-  areRequiredRequestsSuccessful: () => void;
-  isServicesSyncFailed: () => void;
+  areRequiredRequestsLoading: boolean;
+  areRequiredRequestsSuccessful: boolean;
+  isServicesSyncFailed: boolean;
 }
 
 interface RouterStore {

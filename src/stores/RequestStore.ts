@@ -57,13 +57,11 @@ export default class RequestStore extends TypedStore {
   }
 
   @computed get areRequiredRequestsSuccessful(): boolean {
-    return !this.userInfoRequest.isError && !this.syncServicesRequest.isError;
+    return !this.userInfoRequest.isError && !this.servicesRequest.isError;
   }
 
   @computed get areRequiredRequestsLoading(): boolean {
-    return (
-      this.userInfoRequest.isExecuting || this.syncServicesRequest.isExecuting
-    );
+    return this.userInfoRequest.isExecuting || this.servicesRequest.isExecuting;
   }
 
   @computed get isServicesSyncFailed(): boolean {

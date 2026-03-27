@@ -15,6 +15,8 @@ import TypedStore from './lib/TypedStore';
 
 const debug = require('../preload-safe-debug')('Ferdium:UserStore');
 
+const SERVICES_CACHE_KEY_PREFIX = 'ferdium-services-cache-v1';
+
 // TODO: split stores into UserStore and AuthStore
 export default class UserStore extends TypedStore {
   BASE_ROUTE: string = '/auth';
@@ -250,6 +252,7 @@ export default class UserStore extends TypedStore {
     // workaround mobx issue
     localStorage.removeItem('authToken');
     window.localStorage.removeItem('authToken');
+    this._clearServicesCache();
 
     this.getUserInfoRequest.invalidate().reset();
     this.authToken = null;
@@ -394,6 +397,7 @@ export default class UserStore extends TypedStore {
   _setUserData(authToken: any): void {
     const data = this._parseToken(authToken);
     if (data !== false && data.authToken) {
+      this._clearServicesCache();
       localStorage.setItem('authToken', data.authToken);
 
       this.authToken = data.authToken;
@@ -402,6 +406,18 @@ export default class UserStore extends TypedStore {
       this.authToken = null;
       this.id = null;
     }
+  }
+
+  _clearServicesCache(): void {
+    const scopedCachePrefix = `${SERVICES_CACHE_KEY_PREFIX}:`;
+    const keysToRemove = Object.keys(window.localStorage).filter(
+      key =>
+        key === SERVICES_CACHE_KEY_PREFIX || key.startsWith(scopedCachePrefix),
+    );
+
+    keysToRemove.forEach(key => {
+      window.localStorage.removeItem(key);
+    });
   }
 
   getAuthURL(url: string): string {

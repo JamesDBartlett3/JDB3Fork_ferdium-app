@@ -13,6 +13,7 @@ import {
   writeFileSync,
 } from 'fs-extra';
 import { isEqual } from 'lodash';
+import mobxLocalStorage from 'mobx-localstorage';
 import ms from 'ms';
 import tar from 'tar';
 
@@ -47,7 +48,7 @@ const debug = require('../../preload-safe-debug')('Ferdium:ServerApi');
 
 module.paths.unshift(getDevRecipeDirectory(), getRecipeDirectory());
 
-const SERVICES_CACHE_KEY = 'ferdium-services-cache-v1';
+const SERVICES_CACHE_KEY_PREFIX = 'ferdium-services-cache-v1';
 
 interface ServiceCreatePayload {
   iconFile?: any;
@@ -214,25 +215,13 @@ export default class ServerApi {
       throw new Error('Server not loaded');
     }
 
-    const cachedServices = this.getCachedServicesRaw();
     const request = await sendAuthRequest(`${apiBase()}/me/services`);
     if (!request.ok) {
       throw new Error(request.statusText);
     }
     const data = await request.json();
 
-    let resolvedServices = data;
-    if (
-      cachedServices.length > 0 &&
-      this._areServicesDifferent(cachedServices, data) &&
-      // eslint-disable-next-line no-alert
-      window.confirm(
-        'Ferdium detected differences between your local cached services and the server profile. Click OK to keep local cached services, or Cancel to keep the server profile.',
-      )
-    ) {
-      resolvedServices = cachedServices;
-      await this._overwriteServerServices(cachedServices, data);
-    }
+    const resolvedServices = data;
 
     this.setCachedServicesRaw(resolvedServices);
 
@@ -250,26 +239,30 @@ export default class ServerApi {
   }
 
   getCachedServicesRaw() {
+    const cacheKey = this._getServicesCacheKey();
+
     try {
-      const parsed = JSON.parse(
-        window.localStorage.getItem(SERVICES_CACHE_KEY) || '[]',
-      );
+      const parsed = JSON.parse(window.localStorage.getItem(cacheKey) || '[]');
 
       if (Array.isArray(parsed)) {
         return parsed;
       }
 
       debug('ServerApi::getCachedServicesRaw invalid cache format, resetting');
-      window.localStorage.removeItem(SERVICES_CACHE_KEY);
+      window.localStorage.removeItem(cacheKey);
       return [];
     } catch (error) {
       debug('ServerApi::getCachedServicesRaw parse error', error);
+      window.localStorage.removeItem(cacheKey);
       return [];
     }
   }
 
   setCachedServicesRaw(services: any[]) {
-    window.localStorage.setItem(SERVICES_CACHE_KEY, JSON.stringify(services));
+    window.localStorage.setItem(
+      this._getServicesCacheKey(),
+      JSON.stringify(services),
+    );
   }
 
   cacheServicesFromModels(services: ServiceModel[]) {
@@ -787,5 +780,17 @@ export default class ServerApi {
       debug('Could not load dev recipes');
       return false;
     }
+  }
+
+  _getServicesCacheKey() {
+    const authToken =
+      mobxLocalStorage.getItem('authToken') ||
+      window.localStorage.getItem('authToken');
+
+    if (!authToken) {
+      return SERVICES_CACHE_KEY_PREFIX;
+    }
+
+    return `${SERVICES_CACHE_KEY_PREFIX}:${authToken}`;
   }
 }
