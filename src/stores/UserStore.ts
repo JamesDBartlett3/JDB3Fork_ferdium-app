@@ -410,10 +410,17 @@ export default class UserStore extends TypedStore {
 
   _clearServicesCache(): void {
     const scopedCachePrefix = `${SERVICES_CACHE_KEY_PREFIX}:`;
-    const keysToRemove = Object.keys(window.localStorage).filter(
-      key =>
-        key === SERVICES_CACHE_KEY_PREFIX || key.startsWith(scopedCachePrefix),
-    );
+    const keysToRemove: string[] = [];
+    const totalKeys = window.localStorage.length;
+    for (let i = 0; i < totalKeys; i += 1) {
+      const key = window.localStorage.key(i);
+      if (
+        key &&
+        (key === SERVICES_CACHE_KEY_PREFIX || key.startsWith(scopedCachePrefix))
+      ) {
+        keysToRemove.push(key);
+      }
+    }
 
     keysToRemove.forEach(key => {
       window.localStorage.removeItem(key);

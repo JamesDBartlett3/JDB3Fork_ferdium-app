@@ -506,6 +506,7 @@ export default class ServicesStore extends TypedStore {
     const response = await this.createServiceRequest.execute(recipeId, data)
       .promise;
 
+    response.data.updatedAt = response.data.updatedAt ?? Date.now();
     this.allServicesRequest.patch(result => {
       if (!result) return;
       result.push(response.data);
@@ -560,6 +561,7 @@ export default class ServicesStore extends TypedStore {
       service.recipe.id,
       serviceData,
     );
+    data.updatedAt = data.updatedAt ?? Date.now();
     const request = this.updateServiceRequest.execute(serviceId, data);
 
     const newData = serviceData;
@@ -1155,15 +1157,23 @@ export default class ServicesStore extends TypedStore {
     }
   }
 
+  @action syncFromServer() {
+    return this._syncFromServer();
+  }
+
   @action async applyPendingServerSync() {
     if (!this.pendingServerSyncServices) {
       return;
     }
 
     const pendingServices = this.pendingServerSyncServices;
-    await this.allServicesRequest.patch(() => pendingServices);
-    this.api.services.cacheFromModels(pendingServices);
-    this.pendingServerSyncServices = null;
+    try {
+      await this.allServicesRequest.patch(() => pendingServices);
+      this.api.services.cacheFromModels(pendingServices);
+      this.pendingServerSyncServices = null;
+    } catch (error) {
+      debug('ServicesStore::applyPendingServerSync failed', error);
+    }
   }
 
   @action dismissPendingServerSync() {

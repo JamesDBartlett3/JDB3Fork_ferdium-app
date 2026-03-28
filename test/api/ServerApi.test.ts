@@ -69,4 +69,43 @@ describe('ServerApi cache key migration', () => {
       JSON.stringify(legacyServices),
     );
   });
+
+  it('stores updatedAt when extracting service config', () => {
+    const { default: ServerApi } = require('../../src/api/server/ServerApi');
+    const api = new ServerApi();
+    const now = Date.now();
+    const result = api._extractServiceConfig({
+      id: 'service-1',
+      recipeId: 'slack',
+      name: 'Slack',
+      order: 1,
+      updatedAt: now,
+    });
+
+    expect(result.updatedAt).toBe(now);
+  });
+
+  it('memoizes auth token hash for cache key computation', () => {
+    const { default: ServerApi } = require('../../src/api/server/ServerApi');
+    const api = new ServerApi();
+    const token = 'memoized-token';
+
+    const firstKey = api._getServicesCacheKey(token);
+    const secondKey = api._getServicesCacheKey(token);
+
+    expect(firstKey).toBe(secondKey);
+    expect(api.tokenHashCache.get(token)).toBe(firstKey.split(':')[1]);
+  });
+
+  it('isolates cached services between different auth tokens', () => {
+    const { default: ServerApi } = require('../../src/api/server/ServerApi');
+    const api = new ServerApi();
+
+    window.localStorage.setItem('authToken', 'user-1-token');
+    api.setCachedServicesRaw([{ id: 'user-1-service' }]);
+
+    window.localStorage.setItem('authToken', 'user-2-token');
+
+    expect(api.getCachedServicesRaw()).toEqual([]);
+  });
 });

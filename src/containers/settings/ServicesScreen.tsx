@@ -53,6 +53,8 @@ class ServicesScreen extends Component<IProps> {
           }
           retryServicesRequest={() => services.allServicesRequest.reload()}
           searchNeedle={services.filterNeedle}
+          syncServices={() => services.syncFromServer()}
+          isSyncingServices={services.syncServicesRequest.isExecuting}
         />
       </ErrorBoundary>
     );

@@ -42,6 +42,14 @@ describe('ServicesApi', () => {
     expect(server.getServices).toHaveBeenCalledTimes(1);
   });
 
+  it('forwards sync failures from server', async () => {
+    const { api, server } = createApi();
+    server.getServices.mockRejectedValue(new Error('Network error'));
+
+    await expect(api.sync()).rejects.toThrow('Network error');
+    expect(server.getServices).toHaveBeenCalledTimes(1);
+  });
+
   it('persists service models to cache', () => {
     const { api, server } = createApi();
     const services = [{ id: 'service-1' }];

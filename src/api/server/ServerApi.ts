@@ -49,6 +49,7 @@ const debug = require('../../preload-safe-debug')('Ferdium:ServerApi');
 module.paths.unshift(getDevRecipeDirectory(), getRecipeDirectory());
 
 const SERVICES_CACHE_KEY_PREFIX = 'ferdium-services-cache-v1';
+const TOKEN_HASH_CACHE_MAX_SIZE = 5;
 
 interface ServiceCreatePayload {
   iconFile?: any;
@@ -59,6 +60,8 @@ export default class ServerApi {
   recipePreviews: IRecipePreview[] = [];
 
   recipes: IRecipe[] = [];
+
+  tokenHashCache = new Map<string, string>();
 
   // User
   async login(email: string, passwordHash: string) {
@@ -672,6 +675,7 @@ export default class ServerApi {
       proxy: service.proxy,
       customIconUrl: service.customIconUrl,
       hasCustomUploadedIcon: service.hasCustomUploadedIcon,
+      updatedAt: service.updatedAt ?? null,
     };
   }
 
@@ -740,9 +744,23 @@ export default class ServerApi {
       return SERVICES_CACHE_KEY_PREFIX;
     }
 
-    const tokenHash = createHash('sha256')
-      .update(`${SERVICES_CACHE_KEY_PREFIX}:${authToken}`)
-      .digest('hex');
+    let tokenHash = this.tokenHashCache.get(authToken);
+
+    if (tokenHash) {
+      this.tokenHashCache.delete(authToken);
+      this.tokenHashCache.set(authToken, tokenHash);
+    } else {
+      if (this.tokenHashCache.size >= TOKEN_HASH_CACHE_MAX_SIZE) {
+        const oldestToken = this.tokenHashCache.keys().next().value;
+        if (oldestToken) {
+          this.tokenHashCache.delete(oldestToken);
+        }
+      }
+      tokenHash = createHash('sha256')
+        .update(`${SERVICES_CACHE_KEY_PREFIX}:${authToken}`)
+        .digest('hex');
+      this.tokenHashCache.set(authToken, tokenHash);
+    }
 
     return `${SERVICES_CACHE_KEY_PREFIX}:${tokenHash}`;
   }

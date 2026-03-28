@@ -53,6 +53,13 @@ describe('hasServicesSyncConflict', () => {
     expect(hasServicesSyncConflict(local, remote)).toBe(true);
   });
 
+  it('returns true when updatedAt differs', () => {
+    const local = [createService({ updatedAt: 1000 })];
+    const remote = [createService({ updatedAt: 2000 })];
+
+    expect(hasServicesSyncConflict(local, remote)).toBe(true);
+  });
+
   it('returns true when services length differs', () => {
     const local = [createService({ id: 'a' })];
     const remote = [createService({ id: 'a' }), createService({ id: 'b' })];

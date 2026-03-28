@@ -487,6 +487,7 @@
   "settings.services.tooltip.isDisabled": "Service is disabled",
   "settings.services.tooltip.isMuted": "All sounds are muted",
   "settings.services.tooltip.notificationsDisabled": "Notifications are disabled",
+  "settings.services.syncNow": "Sync with server",
   "settings.services.updatedInfo": "Your changes have been saved",
   "settings.supportFerdium.about": "The development of Ferdium is done by contributors. People who use Ferdium like you. They maintain, fix, and improve Ferdium in their spare time.",
   "settings.supportFerdium.aboutIntro": "Special thanks goes to these awesome people:",

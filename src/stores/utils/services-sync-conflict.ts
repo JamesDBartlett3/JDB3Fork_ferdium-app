@@ -1,6 +1,8 @@
 import type Service from '../../models/Service';
 import isEqual from 'lodash/isEqual';
 
+// Only compare service fields that are part of persisted sync payloads.
+// This keeps conflict detection stable across local-only runtime state.
 const toSyncComparableServices = (services: Service[] = []) => {
   return services
     .map(service => ({
@@ -30,10 +32,13 @@ const toSyncComparableServices = (services: Service[] = []) => {
       proxy: service.proxy,
       customIconUrl: service.customIconUrl,
       hasCustomUploadedIcon: service.hasCustomUploadedIcon,
+      updatedAt: service.updatedAt,
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
 };
 
+// Returns true when local and server service payloads diverge,
+// independent of array order, based on sync-relevant fields.
 export const hasServicesSyncConflict = (
   localServices: Service[] = [],
   serverServices: Service[] = [],

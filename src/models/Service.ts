@@ -138,6 +138,8 @@ export default class Service {
 
   @observable proxy: string | null = null;
 
+  @observable updatedAt: number | null = null;
+
   @observable isMediaPlaying: boolean = false;
 
   @observable useFavicon: boolean = DEFAULT_SERVICE_SETTINGS.useFavicon;
@@ -221,6 +223,7 @@ export default class Service {
       this.onlyShowFavoritesInUnreadCount,
     );
     this.proxy = ifUndefined<string | null>(data.proxy, this.proxy);
+    this.updatedAt = ifUndefined<number | null>(data.updatedAt, this.updatedAt);
     this.spellcheckerLanguage = ifUndefined<string | null>(
       data.spellcheckerLanguage,
       this.spellcheckerLanguage,
