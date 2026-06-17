@@ -257,9 +257,83 @@ const createWindow = () => {
   app.on('web-contents-created', (_e, contents) => {
     if (contents.getType() === 'webview') {
       enableWebContents(contents);
-      contents.setWindowOpenHandler(({ url }) => {
+
+      // Set permission handlers on service webview sessions.
+      // This explicitly allows safe permissions and denies unknown ones,
+      // and enables HID/USB/Serial for hardware FIDO2 security key detection.
+      const ses = contents.session;
+      if (!(ses as any)._permissionHandlersSet) {
+        (ses as any)._permissionHandlersSet = true;
+
+        ses.setPermissionRequestHandler((webContents, permission, callback) => {
+          const allowedPermissions = [
+            'media',
+            'notifications',
+            'fullscreen',
+            'pointerLock',
+            'display-capture',
+            'idle-detection',
+            'clipboard-read',
+            'clipboard-sanitized-write',
+            'speaker-selection',
+          ];
+
+          if (allowedPermissions.includes(permission)) {
+            callback(true);
+            return;
+          }
+
+          debug(
+            `Denied permission request: ${permission} from ${webContents?.getURL()}`,
+          );
+          callback(false);
+        });
+
+        ses.setPermissionCheckHandler((_webContents, permission) => {
+          const allowedChecks = [
+            'media',
+            'notifications',
+            'fullscreen',
+            'pointerLock',
+            'display-capture',
+            'idle-detection',
+            'clipboard-read',
+            'clipboard-sanitized-write',
+            'hid',
+            'serial',
+            'usb',
+            'speaker-selection',
+          ];
+
+          return allowedChecks.includes(permission);
+        });
+      }
+
+      contents.setWindowOpenHandler(({ url, disposition }) => {
+        // OAuth popups (Google, Microsoft, etc.) are opened via window.open()
+        // and need window.opener preserved so the parent can receive the
+        // postMessage callback that completes the flow. Allow them as a child
+        // BrowserWindow that inherits the service partition.
+        if (disposition === 'new-window') {
+          return {
+            action: 'allow',
+            outlivesOpener: false,
+            overrideBrowserWindowOptions: {
+              parent: mainWindow,
+              fullscreenable: false,
+              webPreferences: { session: contents.session },
+            },
+          };
+        }
+
+        // Regular link clicks → open in the user's default browser.
         openExternalUrl(url);
         return { action: 'deny' };
+      });
+
+      contents.on('did-create-window', child => {
+        enableWebContents(child.webContents);
+        child.webContents.setWebRTCIPHandlingPolicy(webRTCIPHandlingPolicy);
       });
 
       // Handle will download event from main process (prevent download dialog)
