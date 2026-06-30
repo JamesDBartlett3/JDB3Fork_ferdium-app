@@ -1155,15 +1155,23 @@ export default class ServicesStore extends TypedStore {
         return;
       }
 
-      await this.allServicesRequest
-        .patch(() => serverServices)
-        .then(() => {
-          this.api.services.cacheFromModels(serverServices);
-          this.pendingServerSyncServices = null;
-        });
+      await this._applyServerServices(serverServices);
     } catch (error) {
       debug('ServicesStore::_syncFromServer failed, using local cache', error);
     }
+  }
+
+  // Replaces the in-memory services with the given server payload and persists
+  // them to the local cache. Uses `.then()` rather than awaiting `patch()`
+  // directly because CachedRequest is itself a thenable, which makes awaiting
+  // it directly invalid (TS1320).
+  _applyServerServices(services: Service[]) {
+    return this.allServicesRequest
+      .patch(() => services)
+      .then(() => {
+        this.api.services.cacheFromModels(services);
+        this.pendingServerSyncServices = null;
+      });
   }
 
   @action syncFromServer() {
@@ -1177,12 +1185,7 @@ export default class ServicesStore extends TypedStore {
 
     const pendingServices = this.pendingServerSyncServices;
     try {
-      await this.allServicesRequest
-        .patch(() => pendingServices)
-        .then(() => {
-          this.api.services.cacheFromModels(pendingServices);
-          this.pendingServerSyncServices = null;
-        });
+      await this._applyServerServices(pendingServices);
     } catch (error) {
       debug('ServicesStore::applyPendingServerSync failed', error);
     }
