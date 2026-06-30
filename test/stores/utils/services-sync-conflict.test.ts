@@ -53,11 +53,11 @@ describe('hasServicesSyncConflict', () => {
     expect(hasServicesSyncConflict(local, remote)).toBe(true);
   });
 
-  it('returns true when updatedAt differs', () => {
+  it('ignores updatedAt-only differences (server never returns updatedAt)', () => {
     const local = [createService({ updatedAt: 1000 })];
     const remote = [createService({ updatedAt: 2000 })];
 
-    expect(hasServicesSyncConflict(local, remote)).toBe(true);
+    expect(hasServicesSyncConflict(local, remote)).toBe(false);
   });
 
   it('returns true when services length differs', () => {

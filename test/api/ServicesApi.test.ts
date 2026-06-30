@@ -1,4 +1,5 @@
 import ServicesApi from '../../src/api/ServicesApi';
+import { createServerService } from './__fixtures__/server-services';
 
 const createApi = () => {
   const server = {
@@ -24,22 +25,25 @@ const createApi = () => {
 describe('ServicesApi', () => {
   it('loads services from cache by default', async () => {
     const { api, server } = createApi();
-    server.getCachedServices.mockResolvedValue([{ id: 'cache-1' }]);
+    const cachedServices = [createServerService({ id: 'cache-1' })];
+    server.getCachedServices.mockResolvedValue(cachedServices);
 
     const result = await api.all();
 
     expect(server.getCachedServices).toHaveBeenCalledTimes(1);
     expect(server.getServices).not.toHaveBeenCalled();
-    expect(result).toEqual([{ id: 'cache-1' }]);
+    expect(result).toEqual(cachedServices);
   });
 
   it('syncs services from server when requested', async () => {
     const { api, server } = createApi();
-    server.getServices.mockResolvedValue([]);
+    const serverServices = [createServerService({ id: 'server-1' })];
+    server.getServices.mockResolvedValue(serverServices);
 
-    await api.sync();
+    const result = await api.sync();
 
     expect(server.getServices).toHaveBeenCalledTimes(1);
+    expect(result).toEqual(serverServices);
   });
 
   it('forwards sync failures from server', async () => {
@@ -52,7 +56,7 @@ describe('ServicesApi', () => {
 
   it('persists service models to cache', () => {
     const { api, server } = createApi();
-    const services = [{ id: 'service-1' }];
+    const services = [createServerService({ id: 'service-1' })];
 
     api.cacheFromModels(services);
 

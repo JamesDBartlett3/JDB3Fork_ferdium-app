@@ -1,8 +1,15 @@
-import type Service from '../../models/Service';
 import isEqual from 'lodash/isEqual';
+import type Service from '../../models/Service';
 
 // Only compare service fields that are part of persisted sync payloads.
 // This keeps conflict detection stable across local-only runtime state.
+//
+// `updatedAt` is intentionally excluded: the Ferdium server does not return an
+// `updatedAt` field for services (see ServiceController.list in
+// ferdium/ferdium-server). It is only ever set locally, so comparing it would
+// flag spurious conflicts (e.g. for newly created or pre-existing services
+// whose timestamp never round-trips through the server). The actual service
+// settings below round-trip reliably and already capture real divergence.
 const toSyncComparableServices = (services: Service[] = []) => {
   return services
     .map(service => ({
@@ -32,7 +39,6 @@ const toSyncComparableServices = (services: Service[] = []) => {
       proxy: service.proxy,
       customIconUrl: service.customIconUrl,
       hasCustomUploadedIcon: service.hasCustomUploadedIcon,
-      updatedAt: service.updatedAt,
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
 };
