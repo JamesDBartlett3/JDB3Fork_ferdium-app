@@ -238,7 +238,9 @@ class AppLayout extends Component<PropsWithChildren<IProps>, IState> {
                 {hasPendingSyncConflict && (
                   <InfoBar
                     type="warning"
-                    ctaLabel={intl.formatMessage(messages.buttonUseServerVersion)}
+                    ctaLabel={intl.formatMessage(
+                      messages.buttonUseServerVersion,
+                    )}
                     sticky={false}
                     onClick={applyPendingServerSync}
                     onHide={dismissPendingServerSync}

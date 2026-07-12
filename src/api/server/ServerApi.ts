@@ -275,9 +275,9 @@ export default class ServerApi {
       return [];
     } catch (error) {
       debug('ServerApi::getCachedServicesRaw parse error', error);
-      [...new Set([SERVICES_CACHE_KEY_PREFIX, cacheKey, legacyCacheKey])].forEach(key =>
-        window.localStorage.removeItem(key),
-      );
+      [
+        ...new Set([SERVICES_CACHE_KEY_PREFIX, cacheKey, legacyCacheKey]),
+      ].forEach(key => window.localStorage.removeItem(key));
       return [];
     }
   }

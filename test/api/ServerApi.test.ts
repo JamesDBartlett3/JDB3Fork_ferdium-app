@@ -1,11 +1,25 @@
+/* eslint-disable global-require */
 import { createHash } from 'node:crypto';
-import mobxLocalStorage from 'mobx-localstorage';
+import { createServerService } from './__fixtures__/server-services';
 
 jest.mock('mobx-localstorage', () => ({
   __esModule: true,
   default: {
-    getItem: jest.fn(),
+    getItem: jest.fn(() => null),
   },
+}));
+
+jest.mock('@electron/remote', () => ({
+  __esModule: true,
+  webContents: { fromId: jest.fn() },
+}));
+
+// The cache-key methods under test do not use the Service model at runtime.
+// Mock it to avoid loading its heavy electron/DOM dependency tree under Jest.
+jest.mock('../../src/models/Service', () => ({
+  __esModule: true,
+  // eslint-disable-next-line @typescript-eslint/no-extraneous-class
+  default: class ServiceModelMock {},
 }));
 
 jest.mock('../../src/helpers/recipe-helpers', () => ({
@@ -45,7 +59,6 @@ describe('ServerApi cache key migration', () => {
 
   beforeEach(() => {
     jest.resetModules();
-    (mobxLocalStorage.getItem as jest.Mock).mockReturnValue(null);
     Object.defineProperty(globalThis, 'window', {
       value: { localStorage: createLocalStorage() },
       writable: true,
@@ -56,7 +69,9 @@ describe('ServerApi cache key migration', () => {
   it('migrates legacy token key to hashed key when reading cached services', () => {
     const { default: ServerApi } = require('../../src/api/server/ServerApi');
     const api = new ServerApi();
-    const legacyServices = [{ id: 'legacy-service-1' }];
+    // The raw services cache stores the server's `GET /me/services` payload
+    // verbatim, so use a fixture that mirrors the real server response.
+    const legacyServices = [createServerService({ id: 'legacy-service-1' })];
 
     window.localStorage.setItem('authToken', authToken);
     window.localStorage.setItem(legacyCacheKey, JSON.stringify(legacyServices));
@@ -70,7 +85,7 @@ describe('ServerApi cache key migration', () => {
     );
   });
 
-  it('stores updatedAt when extracting service config', () => {
+  it('preserves a locally-set updatedAt when extracting service config', () => {
     const { default: ServerApi } = require('../../src/api/server/ServerApi');
     const api = new ServerApi();
     const now = Date.now();
@@ -83,6 +98,20 @@ describe('ServerApi cache key migration', () => {
     });
 
     expect(result.updatedAt).toBe(now);
+  });
+
+  it('defaults updatedAt to null for real server services (server omits it)', () => {
+    const { default: ServerApi } = require('../../src/api/server/ServerApi');
+    const api = new ServerApi();
+    // The Ferdium server never sends `updatedAt`, so extracting config from a
+    // real server service must yield `updatedAt: null`.
+    const serverService = createServerService();
+    expect('updatedAt' in serverService).toBe(false);
+
+    const result = api._extractServiceConfig(serverService);
+
+    expect(result.updatedAt).toBeNull();
+    expect(result.recipeId).toBe('slack');
   });
 
   it('memoizes auth token hash for cache key computation', () => {
@@ -102,7 +131,7 @@ describe('ServerApi cache key migration', () => {
     const api = new ServerApi();
 
     window.localStorage.setItem('authToken', 'user-1-token');
-    api.setCachedServicesRaw([{ id: 'user-1-service' }]);
+    api.setCachedServicesRaw([createServerService({ id: 'user-1-service' })]);
 
     window.localStorage.setItem('authToken', 'user-2-token');
 
