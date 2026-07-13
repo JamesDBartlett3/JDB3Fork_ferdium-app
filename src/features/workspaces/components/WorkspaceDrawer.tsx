@@ -161,12 +161,14 @@ class WorkspaceDrawer extends Component<IProps> {
       ? nextWorkspace
       : activeWorkspace;
 
-    const { settings } = this.props.stores;
+    const { settings, requests } = this.props.stores;
 
     const { hideAllServicesWorkspace, useCompactWorkspaceDrawer } =
       settings.all.app;
 
     const compactClass = useCompactWorkspaceDrawer ? 'compact' : '';
+    const isServerConnected = requests.serverConnection === 'connected';
+    const canAddWorkspace = isServerConnected;
 
     return (
       <div className={`${classes.drawer} workspaces-drawer ${compactClass}`}>
@@ -177,7 +179,13 @@ class WorkspaceDrawer extends Component<IProps> {
             className={classes.workspacesSettingsButton}
             onKeyDown={noop}
             onClick={() => {
-              workspaceActions.openWorkspaceSettings();
+              if (canAddWorkspace) {
+                workspaceActions.openWorkspaceSettings();
+              }
+            }}
+            style={{
+              opacity: canAddWorkspace ? 1 : 0.5,
+              cursor: canAddWorkspace ? 'pointer' : 'not-allowed',
             }}
             data-tooltip-id="tooltip-workspaces-drawer"
             data-tooltip-content={intl.formatMessage(
@@ -231,9 +239,15 @@ class WorkspaceDrawer extends Component<IProps> {
           <div
             className={`${classes.addNewWorkspaceLabel} ${compactClass}`}
             onClick={() => {
-              workspaceActions.openWorkspaceSettings();
+              if (canAddWorkspace) {
+                workspaceActions.openWorkspaceSettings();
+              }
             }}
             onKeyDown={noop}
+            style={{
+              opacity: canAddWorkspace ? 1 : 0.5,
+              cursor: canAddWorkspace ? 'pointer' : 'not-allowed',
+            }}
           >
             <Icon
               icon={mdiPlusBox}

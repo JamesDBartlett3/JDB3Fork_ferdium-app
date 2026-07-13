@@ -80,6 +80,7 @@ class ServiceWebview extends Component<IProps> {
   }
 
   @action _setWebview(webview): void {
+    console.log(`[ServiceWebview] _setWebview called for ${this.props.service.name}, webview: ${webview ? 'attached' : 'null'}`);
     this.webview = webview;
   }
 
@@ -128,6 +129,7 @@ class ServiceWebview extends Component<IProps> {
           sandboxServices ? checkForSandbox() : 'persist:general-session'
         }
         onDidAttach={() => {
+          console.log(`[ServiceWebview] onDidAttach called for ${service.name}`);
           // Force the event handler to run in a new task.
           // This resolves a race condition when the `did-attach` is called,
           // but the webview is not attached to the DOM yet:
@@ -135,6 +137,7 @@ class ServiceWebview extends Component<IProps> {
           // This prevents us from immediately attaching listeners such as `did-stop-load`:
           // https://github.com/ferdium/ferdium-app/issues/157
           setTimeout(() => {
+            console.log(`[ServiceWebview] setTimeout callback - calling setWebviewReference for ${service.name}`);
             setWebviewReference({
               serviceId: service.id,
               webview: this.webview.view,

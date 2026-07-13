@@ -2,6 +2,7 @@ import { inject, observer } from 'mobx-react';
 import { Component } from 'react';
 
 import type { StoresProps } from '../../../@types/ferdium-components.types';
+import { LOCAL_SERVER } from '../../../config';
 import ErrorBoundary from '../../../components/util/ErrorBoundary';
 import { deleteWorkspaceRequest, updateWorkspaceRequest } from '../api';
 import EditWorkspaceForm from '../components/EditWorkspaceForm';
@@ -31,6 +32,10 @@ class EditWorkspaceScreen extends Component<StoresProps> {
     const { workspaceBeingEdited } = workspaceStore;
     const { stores } = this.props;
     if (!workspaceBeingEdited) return null;
+
+    const isRemoteAccount = stores.settings.all.app.server !== LOCAL_SERVER;
+    const isServerConnected = stores.requests.serverConnection === 'connected';
+
     return (
       <ErrorBoundary>
         <EditWorkspaceForm
@@ -40,6 +45,9 @@ class EditWorkspaceScreen extends Component<StoresProps> {
           onSave={this.onSave}
           updateWorkspaceRequest={updateWorkspaceRequest}
           deleteWorkspaceRequest={deleteWorkspaceRequest}
+          isServerConnected={
+            isServerConnected && !isRemoteAccount ? true : isServerConnected
+          }
         />
       </ErrorBoundary>
     );

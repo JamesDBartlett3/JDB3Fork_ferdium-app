@@ -9,6 +9,7 @@ import {
   injectIntl,
 } from 'react-intl';
 import { Link } from 'react-router-dom';
+import { Tooltip as ReactTooltip } from 'react-tooltip';
 import { isMac } from '../../../environment';
 import { normalizedUrl } from '../../../helpers/url-helpers';
 import globalMessages from '../../../i18n/globalMessages';
@@ -30,6 +31,11 @@ const messages = defineMessages({
   saveService: {
     id: 'settings.service.form.saveButton',
     defaultMessage: 'Save service',
+  },
+  offlineCreateTooltip: {
+    id: 'settings.service.form.offlineCreateTooltip',
+    defaultMessage:
+      "Can't create new services while the Ferdium server is offline. Please try again when the connection is restored.",
   },
   deleteService: {
     id: 'settings.service.form.deleteButton',
@@ -174,6 +180,7 @@ interface IProps extends WrappedComponentProps {
   isSaving: boolean;
   isDeleting: boolean;
   isProxyFeatureEnabled: boolean;
+  isServerReachable: boolean;
 }
 
 interface IState {
@@ -240,6 +247,7 @@ class EditServiceForm extends Component<IProps, IState> {
       onClearCache,
       openRecipeFile,
       isProxyFeatureEnabled,
+      isServerReachable,
       intl,
     } = this.props;
     const { isValidatingCustomUrl } = this.state;
@@ -555,14 +563,33 @@ class EditServiceForm extends Component<IProps, IState> {
               disabled
             />
           ) : (
-            <Button
-              type="submit"
-              label={intl.formatMessage(messages.saveService)}
-              htmlForm="form"
-              disabled={
-                action !== 'edit' && form.isPristine && requiresUserInput
-              }
-            />
+            <>
+              <Button
+                type="submit"
+                label={intl.formatMessage(messages.saveService)}
+                htmlForm="form"
+                disabled={
+                  (action !== 'edit' && !isServerReachable) ||
+                  (action !== 'edit' && form.isPristine && requiresUserInput)
+                }
+                data-tooltip-id={
+                  action !== 'edit' && !isServerReachable
+                    ? 'tooltip-save-service-offline'
+                    : undefined
+                }
+                data-tooltip-content={
+                  action !== 'edit' && !isServerReachable
+                    ? intl.formatMessage(messages.offlineCreateTooltip)
+                    : undefined
+                }
+              />
+              <ReactTooltip
+                id="tooltip-save-service-offline"
+                place="top"
+                variant="dark"
+                style={{ height: 'auto' }}
+              />
+            </>
           )}
         </div>
       </div>

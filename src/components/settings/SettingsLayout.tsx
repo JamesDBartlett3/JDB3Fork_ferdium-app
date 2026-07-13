@@ -1,4 +1,4 @@
-import { mdiClose } from '@mdi/js';
+import { mdiClose, mdiLoading } from '@mdi/js';
 import { observer } from 'mobx-react';
 import { Component, type PropsWithChildren, type ReactElement } from 'react';
 import {
@@ -11,6 +11,7 @@ import { isEscapeKeyPress } from '../../jsUtils';
 import Appear from '../ui/effects/Appear';
 import Icon from '../ui/icon';
 import ErrorBoundary from '../util/ErrorBoundary';
+import type { ServerConnectionState } from '../../stores/RequestStore';
 
 const messages = defineMessages({
   closeSettings: {
@@ -22,6 +23,8 @@ const messages = defineMessages({
 interface IProps extends WrappedComponentProps {
   navigation: ReactElement;
   closeSettings: () => void;
+  serverHealthCheckLoading?: boolean;
+  serverConnection?: ServerConnectionState;
 }
 
 @observer
@@ -47,7 +50,13 @@ class SettingsLayout extends Component<PropsWithChildren<IProps>> {
   }
 
   render(): ReactElement {
-    const { navigation, closeSettings, intl } = this.props;
+    const {
+      navigation,
+      closeSettings,
+      intl,
+      serverHealthCheckLoading = false,
+      serverConnection = 'connected',
+    } = this.props;
 
     return (
       <Appear transitionName="fadeIn-fast">
@@ -61,7 +70,56 @@ class SettingsLayout extends Component<PropsWithChildren<IProps>> {
             />
             <div className="settings franz-form">
               {navigation}
-              <Outlet />
+              <div
+                style={{
+                  position: 'relative',
+                  opacity: serverHealthCheckLoading ? 0.5 : 1,
+                  pointerEvents: serverHealthCheckLoading ? 'none' : 'auto',
+                  transition: 'opacity 0.2s ease-in-out',
+                }}
+              >
+                <Outlet
+                  context={{ serverConnection, serverHealthCheckLoading }}
+                />
+                {serverHealthCheckLoading && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      zIndex: 1000,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '16px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        animation: 'spin 1s linear infinite',
+                      }}
+                    >
+                      <Icon icon={mdiLoading} size={2} />
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 500 }}>
+                      Checking server connection...
+                    </div>
+                    <style>
+                      {`
+                        @keyframes spin {
+                          from {
+                            transform: rotate(0deg);
+                          }
+                          to {
+                            transform: rotate(360deg);
+                          }
+                        }
+                      `}
+                    </style>
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 className="settings__close"

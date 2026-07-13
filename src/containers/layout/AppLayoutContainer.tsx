@@ -186,16 +186,11 @@ class AppLayoutContainer extends Component<IProps> {
             workspacesDrawer={workspacesDrawer}
             services={servicesContainer}
             installAppUpdate={installUpdate}
-            showRequiredRequestsError={requests.showRequiredRequestsError}
-            areRequiredRequestsSuccessful={
-              requests.areRequiredRequestsSuccessful
-            }
             retryRequiredRequests={retryRequiredRequests}
             areRequiredRequestsLoading={requests.areRequiredRequestsLoading}
-            isServicesSyncFailed={requests.isServicesSyncFailed}
+            serverConnection={requests.connectionDisplayState}
             hasPendingSyncConflict={services.hasPendingSyncConflict}
             applyPendingServerSync={() => services.applyPendingServerSync()}
-            dismissPendingServerSync={() => services.dismissPendingServerSync()}
             updateVersion={app.updateVersion}
             isUpdateAvailable={
               app.updateStatus === app.updateStatusTypes.AVAILABLE

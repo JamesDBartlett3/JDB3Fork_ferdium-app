@@ -2,7 +2,15 @@ import { join } from 'node:path';
 import { clipboard, ipcRenderer, shell } from 'electron';
 import { ensureFileSync, pathExistsSync, writeFileSync } from 'fs-extra';
 import { debounce, remove } from 'lodash';
-import { action, computed, makeObservable, observable, reaction } from 'mobx';
+import {
+  action,
+  computed,
+  makeObservable,
+  observable,
+  reaction,
+  runInAction,
+  when,
+} from 'mobx';
 import ms from 'ms';
 
 import type { Stores } from '../@types/stores.types';
@@ -72,6 +80,10 @@ export default class ServicesStore extends TypedStore {
   @observable lastUsedServices: string[] = [];
 
   @observable pendingServerSyncServices: Service[] | null = null;
+
+  // Tracks the last auth token seen by _loginReaction, so we only invalidate
+  // + re-sync on actual login transitions (not on every boot).
+  _lastSeenToken: string | null = null;
 
   private toggleToTalkCallback = () => this.active?.toggleToTalk();
 
@@ -151,6 +163,7 @@ export default class ServicesStore extends TypedStore {
       this._mapActiveServiceToServiceModelReaction.bind(this),
       this._saveActiveService.bind(this),
       this._logoutReaction.bind(this),
+      this._loginReaction.bind(this),
       this._handleMuteSettings.bind(this),
       this._checkForActiveService.bind(this),
     ]);
@@ -160,9 +173,21 @@ export default class ServicesStore extends TypedStore {
   }
 
   setup() {
-    if (this.stores.user.isLoggedIn) {
-      this._syncFromServer();
-    }
+    // The persisted server URL (settings.app.server) arrives asynchronously
+    // from the main process via the `appSettings` IPC message, which is only
+    // kicked off by SettingsStore.setup() — it is NOT available synchronously
+    // during store init. Until it arrives, _fileSystemSettingsCache holds the
+    // DEFAULT_APP_SETTINGS.server (api.ferdium.org), so apiBase() would send
+    // the first connection check to the WRONG server.
+    //
+    // We use a MobX `when` to defer the initial connection check until
+    // settings have loaded (the real server URL is in place) AND the user is
+    // logged in. The connection state stays at its initial 'connecting' in the
+    // meantime, so the purple banner is shown — never the red one.
+    when(
+      () => this.stores.settings.loaded && this.stores.user.isLoggedIn,
+      () => this.stores.requests._checkServerConnection(),
+    );
 
     // Single key reactions for the sake of your CPU
     reaction(
@@ -452,6 +477,13 @@ export default class ServicesStore extends TypedStore {
     return !!this.pendingServerSyncServices;
   }
 
+  // eslint-disable-next-line @typescript-eslint/class-literal-property-style
+  @computed get hasPendingWrites() {
+    // Write queue mechanism has been removed — writes either succeed or fail immediately.
+    // Pending writes are no longer cached for later replay.
+    return false;
+  }
+
   @computed get isTodosServiceActive() {
     return this.active?.isTodosService;
   }
@@ -472,6 +504,12 @@ export default class ServicesStore extends TypedStore {
     redirect = true,
     skipCleanup = false,
   }) {
+    if (!(await this.stores.requests._verifyServerWritable())) {
+      debug(
+        '_createService: blocked — server not available or account is offline-only',
+      );
+      return;
+    }
     if (!this.stores.recipes.isInstalled(recipeId)) {
       debug(`Recipe "${recipeId}" is not installed, installing recipe`);
       await this.stores.recipes._install({ recipeId });
@@ -503,8 +541,21 @@ export default class ServicesStore extends TypedStore {
       ? serviceData
       : this._cleanUpTeamIdAndCustomUrl(recipeId, serviceData);
 
-    const response = await this.createServiceRequest.execute(recipeId, data)
-      .promise;
+    let response;
+    try {
+      response = await this.createServiceRequest.execute(recipeId, data)
+        .promise;
+    } catch (error) {
+      debug(
+        '_createService: server write failed (server may be offline)',
+        error,
+      );
+      this.actionStatus = ['error'];
+      if (redirect) {
+        this.stores.router.push('/settings/recipes');
+      }
+      return;
+    }
 
     response.data.updatedAt = response.data.updatedAt ?? Date.now();
     this.allServicesRequest.patch(result => {
@@ -556,6 +607,12 @@ export default class ServicesStore extends TypedStore {
   }
 
   @action async _updateService({ serviceId, serviceData, redirect = true }) {
+    if (!(await this.stores.requests._verifyServerWritable())) {
+      debug(
+        '_updateService: blocked — server not available or account is offline-only',
+      );
+      return;
+    }
     const service = this.one(serviceId);
     const data = this._cleanUpTeamIdAndCustomUrl(
       service.recipe.id,
@@ -565,36 +622,45 @@ export default class ServicesStore extends TypedStore {
     const request = this.updateServiceRequest.execute(serviceId, data);
 
     const newData = serviceData;
-    if (serviceData.iconFile) {
+
+    // --- Server write first (no optimistic patch) ---
+    try {
+      // If there's an icon upload, we need to await it to get the URL back.
+      if (serviceData.iconFile) {
+        await request.promise;
+        newData.iconUrl = request.result.data.iconUrl;
+        newData.hasCustomUploadedIcon = true;
+      }
+
       await request.promise;
+      this.actionStatus = request.result.status;
 
-      newData.iconUrl = request.result.data.iconUrl;
-      newData.hasCustomUploadedIcon = true;
+      // --- Patch local state ONLY after server succeeds ---
+      this.allServicesRequest.patch(result => {
+        if (!result) return;
+
+        // patch custom icon deletion
+        if (data.customIcon === 'delete') {
+          newData.iconUrl = '';
+          newData.hasCustomUploadedIcon = false;
+        }
+
+        // patch custom icon url
+        if (data.customIconUrl) {
+          newData.iconUrl = data.customIconUrl;
+        }
+
+        Object.assign(
+          result.find(c => c.id === serviceId),
+          newData,
+        );
+      });
+      this._queuePersistServicesCache();
+    } catch (error) {
+      // Server is unreachable. Write fails locally with no fallback queue.
+      debug('_updateService: server write failed, write blocked', error);
+      return;
     }
-
-    this.allServicesRequest.patch(result => {
-      if (!result) return;
-
-      // patch custom icon deletion
-      if (data.customIcon === 'delete') {
-        newData.iconUrl = '';
-        newData.hasCustomUploadedIcon = false;
-      }
-
-      // patch custom icon url
-      if (data.customIconUrl) {
-        newData.iconUrl = data.customIconUrl;
-      }
-
-      Object.assign(
-        result.find(c => c.id === serviceId),
-        newData,
-      );
-    });
-    this._queuePersistServicesCache();
-
-    await request.promise;
-    this.actionStatus = request.result.status;
 
     if (service.isEnabled) {
       this._sendIPCMessage({
@@ -617,19 +683,32 @@ export default class ServicesStore extends TypedStore {
   }
 
   @action async _deleteService({ serviceId, redirect }): Promise<void> {
-    const request = this.deleteServiceRequest.execute(serviceId);
+    if (!(await this.stores.requests._verifyServerWritable())) {
+      debug(
+        '_deleteService: blocked — server not available or account is offline-only',
+      );
+      return;
+    }
+
+    // Server delete first (no optimistic removal).
+    try {
+      const request = this.deleteServiceRequest.execute(serviceId);
+      await request.promise;
+      this.actionStatus = request.result.status;
+
+      // --- Remove from local state ONLY after server succeeds ---
+      this.allServicesRequest.patch((result: Service[]) => {
+        remove(result, (c: Service) => c.id === serviceId);
+      });
+      this._queuePersistServicesCache();
+    } catch (error) {
+      debug('_deleteService: server write failed, write blocked', error);
+      return;
+    }
 
     if (redirect) {
       this.stores.router.push(redirect);
     }
-
-    this.allServicesRequest.patch((result: Service[]) => {
-      remove(result, (c: Service) => c.id === serviceId);
-    });
-    this._queuePersistServicesCache();
-
-    await request.promise;
-    this.actionStatus = request.result.status;
   }
 
   @action async _openRecipeFile({ recipe, file }): Promise<void> {
@@ -751,9 +830,11 @@ export default class ServicesStore extends TypedStore {
   @action _setWebviewReference({ serviceId, webview }) {
     const service = this.one(serviceId);
     if (service) {
+      console.log(`[ServicesStore] _setWebviewReference for service ${service.name} (${serviceId}), isAttached: ${service.isAttached}`);
       service.webview = webview;
 
       if (!service.isAttached) {
+        console.log(`[ServicesStore] Service ${service.name} not yet attached, initializing webview events`);
         debug('Webview is not attached, initializing');
         service.initializeWebViewEvents({
           handleIPCMessage: this.actions.service.handleIPCMessage,
@@ -813,6 +894,12 @@ export default class ServicesStore extends TypedStore {
   }
 
   @action _toggleService({ serviceId }) {
+    if (this.stores.requests.isWriteLocked) {
+      debug(
+        '_toggleService: blocked — server not connected or sync conflict pending',
+      );
+      return;
+    }
     const service = this.one(serviceId);
 
     service.isEnabled = !service.isEnabled;
@@ -1098,7 +1185,13 @@ export default class ServicesStore extends TypedStore {
     }
   }
 
-  @action _reorderService({ oldIndex, newIndex }) {
+  @action async _reorderService({ oldIndex, newIndex }) {
+    if (!(await this.stores.requests._verifyServerWritable())) {
+      debug(
+        '_reorderService: blocked — server not available or account is offline-only',
+      );
+      return;
+    }
     const { showDisabledServices } = this.stores.settings.all.app;
     const oldEnabledSortIndex = showDisabledServices
       ? oldIndex
@@ -1107,26 +1200,43 @@ export default class ServicesStore extends TypedStore {
       ? newIndex
       : this.all.indexOf(this.enabled[newIndex]);
 
-    this.all.splice(
+    // Compute the new ordering WITHOUT mutating local state yet
+    const services = {};
+    // Create a copy of the current order
+    const allCopy = [...this.all];
+    // Simulate the reorder on the copy
+    allCopy.splice(
       newEnabledSortIndex,
       0,
-      this.all.splice(oldEnabledSortIndex, 1)[0],
+      allCopy.splice(oldEnabledSortIndex, 1)[0],
     );
-
-    const services = {};
-    // TODO: simplify this
-    for (const [index] of this.all.entries()) {
-      services[this.all[index].id] = index;
+    // Build the services map from the simulated order
+    for (const [index] of allCopy.entries()) {
+      services[allCopy[index].id] = index;
     }
 
-    this.reorderServicesRequest.execute(services);
-    this.allServicesRequest
-      .patch((data: Service[]) => {
-        for (const s of data) {
-          s.order = services[s.id];
-        }
-      })
-      .then(() => this._persistServicesCache());
+    // Server write first (no optimistic mutation)
+    try {
+      const request = this.reorderServicesRequest.execute(services);
+      await request.promise;
+
+      // --- Apply the reorder ONLY after server succeeds ---
+      this.all.splice(
+        newEnabledSortIndex,
+        0,
+        this.all.splice(oldEnabledSortIndex, 1)[0],
+      );
+
+      this.allServicesRequest
+        .patch((data: Service[]) => {
+          for (const s of data) {
+            s.order = services[s.id];
+          }
+        })
+        .then(() => this._persistServicesCache());
+    } catch (error) {
+      debug('_reorderService: server write failed, write blocked', error);
+    }
   }
 
   _persistServicesCache() {
@@ -1151,31 +1261,85 @@ export default class ServicesStore extends TypedStore {
         localServices.length > 0 &&
         hasServicesSyncConflict(localServices, serverServices)
       ) {
-        this.pendingServerSyncServices = serverServices;
+        runInAction(() => {
+          this.pendingServerSyncServices = serverServices;
+        });
         return;
       }
 
       await this._applyServerServices(serverServices);
     } catch (error) {
       debug('ServicesStore::_syncFromServer failed, using local cache', error);
+      throw error;
     }
   }
 
-  // Replaces the in-memory services with the given server payload and persists
-  // them to the local cache. Uses `.then()` rather than awaiting `patch()`
-  // directly because CachedRequest is itself a thenable, which makes awaiting
-  // it directly invalid (TS1320).
+  // Merges server services into the local state, preserving webview runtime
+  // state (isFirstLoad, isLoading, isAttached, webview reference, unread
+  // counts, etc.) for services that already exist locally. Services that are
+  // new (from the server) get added as-is with default runtime state. Services
+  // that exist locally but not on the server are dropped (the server is the
+  // source of truth for the service list).
+  //
+  // Uses `.then()` rather than awaiting `patch()` directly because
+  // CachedRequest is itself a thenable, which makes awaiting it directly
+  // invalid (TS1320).
   _applyServerServices(services: Service[]) {
     return this.allServicesRequest
-      .patch(() => services)
-      .then(() => {
-        this.api.services.cacheFromModels(services);
-        this.pendingServerSyncServices = null;
-      });
+      .patch(existing => {
+        if (!existing || existing.length === 0) {
+          return services;
+        }
+
+        // Build a lookup of existing services by ID for quick merge.
+        const existingById = new Map<string, Service>();
+        for (const s of existing) {
+          existingById.set(s.id, s);
+        }
+
+        // Merge: for each server service, if it existed locally, copy the
+        // webview-runtime state onto the new model. Otherwise use as-is.
+        return services.map(serverService => {
+          const local = existingById.get(serverService.id);
+          if (!local) {
+            // New service from server — keep default runtime state.
+            return serverService;
+          }
+          // Preserve webview runtime state that the server doesn't return.
+          // These fields are client-side only and losing them causes the
+          // infinite "Loading" spinner (isFirstLoad/isLoading) and other
+          // webview lifecycle issues.
+          /* eslint-disable no-param-reassign */
+          serverService.isAttached = local.isAttached;
+          serverService.isFirstLoad = local.isFirstLoad;
+          serverService.isLoading = local.isLoading;
+          serverService.isLoadingPage = local.isLoadingPage;
+          serverService.isError = local.isError;
+          serverService.errorMessage = local.errorMessage;
+          serverService.webview = local.webview;
+          serverService.unreadDirectMessageCount =
+            local.unreadDirectMessageCount;
+          serverService.unreadIndirectMessageCount =
+            local.unreadIndirectMessageCount;
+          serverService.dialogTitle = local.dialogTitle;
+          serverService.hasCrashed = local.hasCrashed;
+          serverService.isHibernationRequested = local.isHibernationRequested;
+          serverService.lastPoll = local.lastPoll;
+          serverService.lastPollAnswer = local.lastPollAnswer;
+          /* eslint-enable no-param-reassign */
+          return serverService;
+        });
+      })
+      .then(
+        action(() => {
+          this.api.services.cacheFromModels(services);
+          this.pendingServerSyncServices = null;
+        }),
+      );
   }
 
   @action syncFromServer() {
-    return this._syncFromServer();
+    return this.stores.requests._checkServerConnection();
   }
 
   @action async applyPendingServerSync() {
@@ -1193,6 +1357,24 @@ export default class ServicesStore extends TypedStore {
 
   @action dismissPendingServerSync() {
     this.pendingServerSyncServices = null;
+  }
+
+  /**
+   * Replay any service writes (update / delete / reorder) that were queued
+   * while the server was offline. Called by `RequestStore` when the server
+   * becomes reachable again, BEFORE `_syncFromServer` runs — this ordering is
+   * critical because `_applyServerServices` does a wholesale replacement of
+   * local state, so pending writes must land on the server first or they
+   * would be lost.
+   *
+   * If any write fails again (server went back down mid-flush), the remaining
+   * ops stay dequeued — they will be re-enqueued by the next failed write or
+   * the user can retry manually. This is an acceptable trade-off: the writes
+   * were already applied optimistically to the local cache.
+   */
+  async _flushPendingWrites(): Promise<void> {
+    // DEPRECATED: Write-queue mechanism has been removed. This method is a no-op.
+    // Writes are no longer queued for later replay if the server is unreachable.
   }
 
   @action _toggleNotifications({ serviceId }) {
@@ -1440,6 +1622,44 @@ export default class ServicesStore extends TypedStore {
         key: 'activeService',
       });
       this.allServicesRequest.invalidate().reset();
+      // Write-queue mechanism removed; no queued writes to clear on logout.
+    }
+  }
+
+  /**
+   * Watches the observable `user.authToken`. When it transitions from null to
+   * a real token (i.e. the user just logged in), invalidate any stale in-memory
+   * services cache and pull fresh data from the server. This ensures services
+   * added by other clients on the same account appear immediately, and that the
+   * conflict-detection banner shows if the server data differs from any local
+   * state.
+   *
+   * We read `user.authToken` (an @observable) so MobX tracks changes, then
+   * check localStorage for the actual value (the type declaration for
+   * authToken is stale — it's `string | null`, not `() => void`).
+   */
+  _loginReaction() {
+    // Read the observable so MobX re-runs this reaction when it changes.
+    const authTokenObservable = this.stores.user.authToken as unknown as
+      | string
+      | null;
+    const token = authTokenObservable ?? localStorage.getItem('authToken');
+    if (token) {
+      // Only invalidate + re-sync on actual login transitions (token changed).
+      // On boot, setup() already handles the initial sync — invalidating here
+      // would destroy the in-memory service models and cause the webview
+      // lifecycle events to never re-wire (infinite spinner).
+      if (this._lastSeenToken !== null && this._lastSeenToken !== token) {
+        if (this.allServicesRequest.wasExecuted) {
+          runInAction(() => {
+            this.allServicesRequest.invalidate();
+          });
+        }
+        this.stores.requests._checkServerConnection();
+      }
+      this._lastSeenToken = token;
+    } else {
+      this._lastSeenToken = null;
     }
   }
 

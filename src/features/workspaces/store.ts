@@ -176,26 +176,56 @@ export default class WorkspacesStore extends FeatureStore {
   };
 
   @action _create = async ({ name }) => {
-    const workspace = await createWorkspaceRequest.execute(name).promise;
-    await getUserWorkspacesRequest.result.push(workspace);
-    this._edit({ workspace });
+    if (!(await this.stores.requests._verifyServerWritable())) {
+      debug(
+        '_create: blocked — server not available or account is offline-only',
+      );
+      return;
+    }
+    try {
+      const workspace = await createWorkspaceRequest.execute(name).promise;
+      await getUserWorkspacesRequest.result.push(workspace);
+      this._edit({ workspace });
+    } catch (error) {
+      debug('_create: server write failed', error);
+    }
   };
 
   @action _delete = async ({ workspace }) => {
-    await deleteWorkspaceRequest.execute(workspace).promise;
-    await getUserWorkspacesRequest.result.remove(workspace);
-    this.stores.router.push('/settings/workspaces');
-    if (this.activeWorkspace === workspace) {
-      this._deactivateActiveWorkspace();
+    if (!(await this.stores.requests._verifyServerWritable())) {
+      debug(
+        '_delete: blocked — server not available or account is offline-only',
+      );
+      return;
+    }
+    try {
+      await deleteWorkspaceRequest.execute(workspace).promise;
+      await getUserWorkspacesRequest.result.remove(workspace);
+      this.stores.router.push('/settings/workspaces');
+      if (this.activeWorkspace === workspace) {
+        this._deactivateActiveWorkspace();
+      }
+    } catch (error) {
+      debug('_delete: server write failed', error);
     }
   };
 
   @action _update = async ({ workspace }) => {
-    await updateWorkspaceRequest.execute(workspace).promise;
-    // Path local result optimistically
-    const localWorkspace = this._getWorkspaceById(workspace.id);
-    Object.assign(localWorkspace, workspace);
-    this.stores.router.push('/settings/workspaces');
+    if (!(await this.stores.requests._verifyServerWritable())) {
+      debug(
+        '_update: blocked — server not available or account is offline-only',
+      );
+      return;
+    }
+    try {
+      await updateWorkspaceRequest.execute(workspace).promise;
+      // Patch local result ONLY after server succeeds
+      const localWorkspace = this._getWorkspaceById(workspace.id);
+      Object.assign(localWorkspace, workspace);
+      this.stores.router.push('/settings/workspaces');
+    } catch (error) {
+      debug('_update: server write failed', error);
+    }
   };
 
   @action _setNextWorkspace(workspace) {
@@ -281,11 +311,22 @@ export default class WorkspacesStore extends FeatureStore {
     if (!this.activeWorkspace) {
       return;
     }
+    if (!(await this.stores.requests._verifyServerWritable())) {
+      debug(
+        'reorderServicesOfActiveWorkspace: blocked — server not available or account is offline-only',
+      );
+      return;
+    }
 
     const { services = [] } = this.activeWorkspace;
-    // Move services from the old to the new position
-    services.splice(newIndex, 0, services.splice(oldIndex, 1)[0]);
-    await updateWorkspaceRequest.execute(this.activeWorkspace).promise;
+    try {
+      // Send reorder to server BEFORE mutating local state
+      await updateWorkspaceRequest.execute(this.activeWorkspace).promise;
+      // Move services from the old to the new position ONLY after server succeeds
+      services.splice(newIndex, 0, services.splice(oldIndex, 1)[0]);
+    } catch (error) {
+      debug('reorderServicesOfActiveWorkspace: server write failed', error);
+    }
   };
 
   @action _setOpenDrawerWithSettings() {

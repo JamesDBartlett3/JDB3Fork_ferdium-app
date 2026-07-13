@@ -137,6 +137,8 @@ class EditUserScreen extends Component<EditUserScreenProps> {
     }
 
     const form = this.prepareForm(user.data);
+    const isServerConnected =
+      this.props.stores.requests.serverConnection === 'connected';
 
     return (
       <ErrorBoundary>
@@ -145,6 +147,7 @@ class EditUserScreen extends Component<EditUserScreenProps> {
           form={form}
           isSaving={user.updateUserInfoRequest.isExecuting}
           onSubmit={d => this.onSubmit(d)}
+          isServerConnected={isServerConnected}
         />
       </ErrorBoundary>
     );

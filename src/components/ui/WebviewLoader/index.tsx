@@ -31,8 +31,17 @@ interface IProps extends WithStylesProps<typeof styles>, WrappedComponentProps {
 }
 
 class WebviewLoader extends Component<IProps> {
+  componentDidMount(): void {
+    console.log(`[WebviewLoader] Mounted for service: ${this.props.name}`);
+  }
+
+  componentWillUnmount(): void {
+    console.log(`[WebviewLoader] Unmounting for service: ${this.props.name}`);
+  }
+
   render(): ReactElement {
     const { classes, name, loaded = false, intl } = this.props;
+    console.log(`[WebviewLoader] Rendering for service: ${name}, loaded: ${loaded}`);
     return (
       <FullscreenLoader
         className={classes.component}

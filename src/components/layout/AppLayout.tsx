@@ -47,10 +47,14 @@ const messages = defineMessages({
     defaultMessage:
       'Unable to sync services with the server. Using locally cached services.',
   },
+  servicesSyncConnecting: {
+    id: 'infobar.servicesSyncConnecting',
+    defaultMessage: 'Connecting to the Ferdium server…',
+  },
   servicesSyncConflict: {
     id: 'infobar.servicesSyncConflict',
     defaultMessage:
-      'Service changes differ between local cache and server. Choose whether to keep local services or use the server version.',
+      'Service changes differ between local cache and server. Sync with the server to continue making changes.',
   },
   buttonUseServerVersion: {
     id: 'infobar.buttonUseServerVersion',
@@ -116,14 +120,11 @@ interface IProps extends WrappedComponentProps, WithStylesProps<typeof styles> {
   appUpdateIsDownloaded: boolean;
   authRequestFailed: boolean;
   installAppUpdate: () => void;
-  showRequiredRequestsError: boolean;
-  areRequiredRequestsSuccessful: boolean;
   retryRequiredRequests: () => void;
   areRequiredRequestsLoading: boolean;
-  isServicesSyncFailed: boolean;
+  serverConnection: 'connected' | 'connecting' | 'disconnected';
   hasPendingSyncConflict: boolean;
   applyPendingServerSync: () => void;
-  dismissPendingServerSync: () => void;
 }
 
 interface IState {
@@ -154,14 +155,11 @@ class AppLayout extends Component<PropsWithChildren<IProps>, IState> {
       authRequestFailed,
       installAppUpdate,
       settings,
-      showRequiredRequestsError,
-      areRequiredRequestsSuccessful,
       retryRequiredRequests,
       areRequiredRequestsLoading,
-      isServicesSyncFailed,
+      serverConnection,
       hasPendingSyncConflict,
       applyPendingServerSync,
-      dismissPendingServerSync,
       updateVersion,
       isUpdateAvailable,
     } = this.props;
@@ -198,19 +196,6 @@ class AppLayout extends Component<PropsWithChildren<IProps>, IState> {
               {sidebar}
               <div className="app__service">
                 <WorkspaceSwitchingIndicator />
-                {!areRequiredRequestsSuccessful &&
-                  showRequiredRequestsError && (
-                    <InfoBar
-                      type="danger"
-                      ctaLabel="Try again"
-                      ctaLoading={areRequiredRequestsLoading}
-                      sticky
-                      onClick={retryRequiredRequests}
-                    >
-                      <Icon icon={mdiFlash} />
-                      {intl.formatMessage(messages.requiredRequestsFailed)}
-                    </InfoBar>
-                  )}
                 {authRequestFailed && (
                   <InfoBar
                     type="danger"
@@ -223,9 +208,15 @@ class AppLayout extends Component<PropsWithChildren<IProps>, IState> {
                     {intl.formatMessage(messages.authRequestFailed)}
                   </InfoBar>
                 )}
-                {isServicesSyncFailed && (
+                {serverConnection === 'connecting' && (
+                  <InfoBar type="primary" sticky>
+                    <Icon icon={mdiFlash} />
+                    {intl.formatMessage(messages.servicesSyncConnecting)}
+                  </InfoBar>
+                )}
+                {serverConnection === 'disconnected' && (
                   <InfoBar
-                    type="primary"
+                    type="danger"
                     ctaLabel="Retry sync"
                     ctaLoading={areRequiredRequestsLoading}
                     sticky
@@ -241,9 +232,8 @@ class AppLayout extends Component<PropsWithChildren<IProps>, IState> {
                     ctaLabel={intl.formatMessage(
                       messages.buttonUseServerVersion,
                     )}
-                    sticky={false}
+                    sticky
                     onClick={applyPendingServerSync}
-                    onHide={dismissPendingServerSync}
                   >
                     <Icon icon={mdiFlash} />
                     {intl.formatMessage(messages.servicesSyncConflict)}

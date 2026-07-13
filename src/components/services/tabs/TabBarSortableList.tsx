@@ -22,6 +22,7 @@ interface IProps {
   enableService: (args: { serviceId: string }) => void;
   hibernateService: (args: { serviceId: string }) => void;
   wakeUpService: (args: { serviceId: string }) => void;
+  isServerConnected?: boolean;
 }
 
 @observer
@@ -44,10 +45,17 @@ class TabBarSortableList extends Component<IProps> {
       showMessageBadgeWhenMutedSetting,
       showServiceNameSetting,
       showMessageBadgesEvenWhenMuted,
+      isServerConnected = true,
     } = this.props;
 
     return (
-      <ul className="tabs">
+      <ul
+        className="tabs"
+        style={{
+          opacity: isServerConnected ? 1 : 0.6,
+          cursor: isServerConnected ? 'auto' : 'not-allowed',
+        }}
+      >
         {services.map((service, index) => (
           <TabItem
             key={service.id}

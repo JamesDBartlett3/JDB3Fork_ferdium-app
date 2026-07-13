@@ -28,18 +28,26 @@ interface IProps {
     serviceData: { isEnabled: boolean; isMediaPlaying: boolean };
     redirect: boolean;
   }) => void;
+  isServerConnected?: boolean;
 }
 
 @observer
 class TabBar extends Component<IProps> {
   onSortEnd = ({ oldIndex, newIndex }) => {
-    const { enableToolTip, reorder } = this.props;
+    const { enableToolTip, reorder, isServerConnected = true } = this.props;
 
     enableToolTip();
-    reorder({ oldIndex, newIndex });
+    // Only allow reordering if server is connected
+    if (isServerConnected) {
+      reorder({ oldIndex, newIndex });
+    }
   };
 
-  shouldPreventSorting = event => event.target.tagName !== 'LI';
+  shouldPreventSorting = event => {
+    const { isServerConnected = true } = this.props;
+    // Prevent sorting if server is disconnected OR if clicking on non-LI element
+    return !isServerConnected || event.target.tagName !== 'LI';
+  };
 
   toggleService = (args: { serviceId: string; isEnabled: boolean }) => {
     const { updateService } = this.props;
@@ -92,6 +100,7 @@ class TabBar extends Component<IProps> {
       showMessageBadgeWhenMutedSetting,
       showServiceNameSetting,
       showMessageBadgesEvenWhenMuted,
+      isServerConnected = true,
     } = this.props;
 
     const axis = useHorizontalStyle ? 'x' : 'y';
@@ -123,6 +132,7 @@ class TabBar extends Component<IProps> {
           showMessageBadgeWhenMutedSetting={showMessageBadgeWhenMutedSetting}
           showServiceNameSetting={showServiceNameSetting}
           showMessageBadgesEvenWhenMuted={showMessageBadgesEvenWhenMuted}
+          isServerConnected={isServerConnected}
         />
       </div>
     );

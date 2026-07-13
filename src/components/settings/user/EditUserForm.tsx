@@ -51,6 +51,7 @@ interface IProps extends WrappedComponentProps {
   form: Form;
   onSubmit: FormEventHandler<HTMLFormElement>;
   isSaving: boolean;
+  isServerConnected?: boolean;
 }
 
 @observer
@@ -73,7 +74,10 @@ class EditUserForm extends Component<IProps> {
       form,
       isSaving,
       intl,
+      isServerConnected = true,
     } = this.props;
+
+    const isDisabled = !isServerConnected;
 
     return (
       <div className="settings__main">
@@ -89,6 +93,11 @@ class EditUserForm extends Component<IProps> {
           </span>
         </div>
         <div className="settings__body">
+          {isDisabled && (
+            <Infobox type="warning" icon="alert-circle-outline">
+              Settings are not available while server is offline
+            </Infobox>
+          )}
           <form onSubmit={e => this.submit(e)} id="form">
             {status.length > 0 && status.includes('data-updated') && (
               <Infobox type="success" icon="checkbox-marked-circle-outline">
@@ -96,22 +105,54 @@ class EditUserForm extends Component<IProps> {
               </Infobox>
             )}
             <H2>{intl.formatMessage(messages.headlineAccount)}</H2>
-            <div className="grid__row">
-              <Input {...form.$('firstname').bind()} focus />
-              <Input {...form.$('lastname').bind()} />
+            <div
+              className="grid__row"
+              style={{
+                opacity: isDisabled ? 0.6 : 1,
+                pointerEvents: isDisabled ? 'none' : 'auto',
+              }}
+            >
+              <Input
+                {...form.$('firstname').bind()}
+                focus
+                disabled={isDisabled}
+              />
+              <Input {...form.$('lastname').bind()} disabled={isDisabled} />
             </div>
-            <Input {...form.$('email').bind()} />
-            <Radio field={form.$('accountType')} className="" />
-            {form.$('accountType').value === 'company' && (
-              <Input {...form.$('organization').bind()} />
-            )}
+            <div
+              style={{
+                opacity: isDisabled ? 0.6 : 1,
+                pointerEvents: isDisabled ? 'none' : 'auto',
+              }}
+            >
+              <Input {...form.$('email').bind()} disabled={isDisabled} />
+              <Radio field={form.$('accountType')} className="" />
+              {form.$('accountType').value === 'company' && (
+                <Input
+                  {...form.$('organization').bind()}
+                  disabled={isDisabled}
+                />
+              )}
+            </div>
             <H2>{intl.formatMessage(messages.headlinePassword)}</H2>
-            <Input {...form.$('oldPassword').bind()} showPasswordToggle />
-            <Input
-              {...form.$('newPassword').bind()}
-              showPasswordToggle
-              scorePassword
-            />
+            <div
+              style={{
+                opacity: isDisabled ? 0.6 : 1,
+                pointerEvents: isDisabled ? 'none' : 'auto',
+              }}
+            >
+              <Input
+                {...form.$('oldPassword').bind()}
+                showPasswordToggle
+                disabled={isDisabled}
+              />
+              <Input
+                {...form.$('newPassword').bind()}
+                showPasswordToggle
+                scorePassword
+                disabled={isDisabled}
+              />
+            </div>
           </form>
         </div>
         <div className="settings__controls">
@@ -131,6 +172,7 @@ class EditUserForm extends Component<IProps> {
               label={intl.formatMessage(messages.buttonSave)}
               htmlForm="form"
               onClick={noop}
+              disabled={isDisabled}
             />
           )}
         </div>

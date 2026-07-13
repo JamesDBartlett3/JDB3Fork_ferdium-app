@@ -14,6 +14,9 @@ class InviteScreen extends Component<StoresProps> {
     const { actions } = this.props;
     const { user } = this.props.stores;
 
+    const isServerConnected =
+      this.props.stores.requests.serverConnection === 'connected';
+
     return (
       <ErrorBoundary>
         <Invite
@@ -23,6 +26,7 @@ class InviteScreen extends Component<StoresProps> {
             user.inviteRequest.wasExecuted && !user.inviteRequest.isError
           }
           embed
+          isServerConnected={isServerConnected}
         />
       </ErrorBoundary>
     );
