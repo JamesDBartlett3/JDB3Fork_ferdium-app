@@ -98,7 +98,10 @@ class ServiceView extends Component<IProps, IState> {
       intl,
     } = this.props;
 
-    console.log(`[ServiceView.render] ${service.name} - isActive: ${service.isActive}, isEnabled: ${service.isEnabled}, isLoading: ${service.isLoading}, isFirstLoad: ${service.isFirstLoad}, isHibernating: ${service.isHibernating}, isServiceAccessRestricted: ${service.isServiceAccessRestricted}`);
+    // eslint-disable-next-line no-console
+    console.log(
+      `[ServiceView.render] ${service.name} - isActive: ${service.isActive}, isEnabled: ${service.isEnabled}, isLoading: ${service.isLoading}, isFirstLoad: ${service.isFirstLoad}, isHibernating: ${service.isHibernating}, isServiceAccessRestricted: ${service.isServiceAccessRestricted}`,
+    );
 
     const { navigationBarBehaviour, navigationBarManualActive } =
       stores!.settings.app;
@@ -141,7 +144,10 @@ class ServiceView extends Component<IProps, IState> {
               !service.isHibernating &&
               !service.isServiceAccessRestricted && (
                 <>
-                  {console.log(`[ServiceView] Rendering WebviewLoader for ${service.name}`)}
+                  {/* eslint-disable-next-line no-console */}
+                  {console.log(
+                    `[ServiceView] Rendering WebviewLoader for ${service.name}`,
+                  )}
                   <WebviewLoader loaded={false} name={service.name} />
                 </>
               )}

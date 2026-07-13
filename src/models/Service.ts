@@ -257,6 +257,7 @@ export default class Service {
   }
 
   @action _didStartLoading(): void {
+    // eslint-disable-next-line no-console
     console.log(`[Service ${this.name}] _didStartLoading called`);
     this.hasCrashed = false;
     this.isLoading = true;
@@ -265,13 +266,19 @@ export default class Service {
   }
 
   @action _didStopLoading(): void {
-    console.log(`[Service ${this.name}] _didStopLoading called - isLoading will be false`);
+    // eslint-disable-next-line no-console
+    console.log(
+      `[Service ${this.name}] _didStopLoading called - isLoading will be false`,
+    );
     this.isLoading = false;
     this.isLoadingPage = false;
   }
 
   @action _didLoad(): void {
-    console.log(`[Service ${this.name}] _didLoad called - isLoading will be false, isFirstLoad will be ${!this.isError}`);
+    // eslint-disable-next-line no-console
+    console.log(
+      `[Service ${this.name}] _didLoad called - isLoading will be false, isFirstLoad will be ${!this.isError}`,
+    );
     this.isLoading = false;
     this.isLoadingPage = false;
 
@@ -496,6 +503,7 @@ export default class Service {
     );
 
     this.webview.addEventListener('did-start-loading', event => {
+      // eslint-disable-next-line no-console
       console.log(`[Service ${this.name}] Webview event: did-start-loading`);
       debug('Did start load', this.name, event);
 
@@ -503,6 +511,7 @@ export default class Service {
     });
 
     this.webview.addEventListener('did-stop-loading', event => {
+      // eslint-disable-next-line no-console
       console.log(`[Service ${this.name}] Webview event: did-stop-loading`);
       debug('Did stop load', this.name, event);
 
@@ -511,7 +520,10 @@ export default class Service {
 
     // eslint-disable-next-line unicorn/consistent-function-scoping
     const didLoad = () => {
-      console.log(`[Service ${this.name}] Webview event: did-load (frame-finish or navigate)`);
+      // eslint-disable-next-line no-console
+      console.log(
+        `[Service ${this.name}] Webview event: did-load (frame-finish or navigate)`,
+      );
       this._didLoad();
     };
 
@@ -519,6 +531,7 @@ export default class Service {
     this.webview.addEventListener('did-navigate', didLoad.bind(this));
 
     this.webview.addEventListener('did-fail-load', event => {
+      // eslint-disable-next-line no-console
       console.log(`[Service ${this.name}] Webview event: did-fail-load`, event);
       debug('Service failed to load', this.name, event);
       if (

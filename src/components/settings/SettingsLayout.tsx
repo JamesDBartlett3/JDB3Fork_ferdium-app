@@ -70,56 +70,50 @@ class SettingsLayout extends Component<PropsWithChildren<IProps>> {
             />
             <div className="settings franz-form">
               {navigation}
-              <div
-                style={{
-                  position: 'relative',
-                  opacity: serverHealthCheckLoading ? 0.5 : 1,
-                  pointerEvents: serverHealthCheckLoading ? 'none' : 'auto',
-                  transition: 'opacity 0.2s ease-in-out',
-                }}
-              >
-                <Outlet
-                  context={{ serverConnection, serverHealthCheckLoading }}
-                />
-                {serverHealthCheckLoading && (
+              <Outlet
+                context={{ serverConnection, serverHealthCheckLoading }}
+              />
+              {serverHealthCheckLoading && (
+                <div
+                  style={{
+                    position: 'fixed',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    zIndex: 9999,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '16px',
+                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                    padding: '24px',
+                    borderRadius: '8px',
+                  }}
+                >
                   <div
                     style={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      transform: 'translate(-50%, -50%)',
-                      zIndex: 1000,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '16px',
+                      animation: 'spin 1s linear infinite',
                     }}
                   >
-                    <div
-                      style={{
-                        animation: 'spin 1s linear infinite',
-                      }}
-                    >
-                      <Icon icon={mdiLoading} size={2} />
-                    </div>
-                    <div style={{ fontSize: '14px', fontWeight: 500 }}>
-                      Checking server connection...
-                    </div>
-                    <style>
-                      {`
-                        @keyframes spin {
-                          from {
-                            transform: rotate(0deg);
-                          }
-                          to {
-                            transform: rotate(360deg);
-                          }
-                        }
-                      `}
-                    </style>
+                    <Icon icon={mdiLoading} size={2} />
                   </div>
-                )}
-              </div>
+                  <div style={{ fontSize: '14px', fontWeight: 500, color: '#fff' }}>
+                    Checking server connection...
+                  </div>
+                  <style>
+                    {`
+                      @keyframes spin {
+                        from {
+                          transform: rotate(0deg);
+                        }
+                        to {
+                          transform: rotate(360deg);
+                        }
+                      }
+                    `}
+                  </style>
+                </div>
+              )}
               <button
                 type="button"
                 className="settings__close"

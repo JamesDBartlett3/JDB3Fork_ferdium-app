@@ -830,11 +830,17 @@ export default class ServicesStore extends TypedStore {
   @action _setWebviewReference({ serviceId, webview }) {
     const service = this.one(serviceId);
     if (service) {
-      console.log(`[ServicesStore] _setWebviewReference for service ${service.name} (${serviceId}), isAttached: ${service.isAttached}`);
+      // eslint-disable-next-line no-console
+      console.log(
+        `[ServicesStore] _setWebviewReference for service ${service.name} (${serviceId}), isAttached: ${service.isAttached}`,
+      );
       service.webview = webview;
 
       if (!service.isAttached) {
-        console.log(`[ServicesStore] Service ${service.name} not yet attached, initializing webview events`);
+        // eslint-disable-next-line no-console
+        console.log(
+          `[ServicesStore] Service ${service.name} not yet attached, initializing webview events`,
+        );
         debug('Webview is not attached, initializing');
         service.initializeWebViewEvents({
           handleIPCMessage: this.actions.service.handleIPCMessage,
