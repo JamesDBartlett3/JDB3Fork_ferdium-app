@@ -189,12 +189,22 @@ class RecipesDashboard extends Component<IProps, IState> {
               {intl.formatMessage(messages.offlineCreateTooltip)}
             </Infobox>
           )}
-          <div
-            style={{
-              opacity: recipeDisabled ? 0.6 : 1,
-              pointerEvents: recipeDisabled ? 'none' : 'auto',
-            }}
-          >
+          {recipeDisabled ? (
+            <div
+              style={{
+                opacity: 0.6,
+                pointerEvents: 'none',
+              }}
+            >
+              <SearchInput
+                placeholder={intl.formatMessage(messages.searchService)}
+                onChange={e => searchRecipes(e)}
+                onReset={() => resetSearch()}
+                autoFocus
+                throttle
+              />
+            </div>
+          ) : (
             <SearchInput
               placeholder={intl.formatMessage(messages.searchService)}
               onChange={e => searchRecipes(e)}
@@ -202,7 +212,7 @@ class RecipesDashboard extends Component<IProps, IState> {
               autoFocus
               throttle
             />
-          </div>
+          )}
           <div
             className="recipes__navigation"
             style={{

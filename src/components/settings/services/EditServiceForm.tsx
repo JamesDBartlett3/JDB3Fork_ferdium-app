@@ -37,6 +37,11 @@ const messages = defineMessages({
     defaultMessage:
       "Can't create new services while the Ferdium server is offline. Please try again when the connection is restored.",
   },
+  offlineDeleteTooltip: {
+    id: 'settings.service.form.offlineDeleteTooltip',
+    defaultMessage:
+      "Can't delete services while the Ferdium server is offline. Please try again when the connection is restored.",
+  },
   deleteService: {
     id: 'settings.service.form.deleteButton',
     defaultMessage: 'Delete service',
@@ -261,28 +266,43 @@ class EditServiceForm extends Component<IProps, IState> {
         disabled
       />
     ) : (
-      <Button
-        buttonType="danger"
-        label={intl.formatMessage(messages.deleteService)}
-        className="settings__delete-button"
-        onClick={() => {
-          // @ts-expect-error Fix me
-          const selection = dialog.showMessageBoxSync(app.mainWindow, {
-            type: 'question',
-            message: intl.formatMessage(messages.deleteService),
-            detail: intl.formatMessage(messages.confirmDeleteService, {
-              serviceName: service?.name || recipe.name,
-            }),
-            buttons: [
-              intl.formatMessage(globalMessages.yes),
-              intl.formatMessage(globalMessages.no),
-            ],
-          });
-          if (selection === 0) {
-            onDelete();
+      <>
+        <Button
+          buttonType="danger"
+          label={intl.formatMessage(messages.deleteService)}
+          className="settings__delete-button"
+          disabled={!isServerReachable}
+          data-tooltip-id={!isServerReachable ? 'tooltip-delete-service-offline' : undefined}
+          data-tooltip-content={
+            !isServerReachable
+              ? intl.formatMessage(messages.offlineDeleteTooltip)
+              : undefined
           }
-        }}
-      />
+          onClick={() => {
+            // @ts-expect-error Fix me
+            const selection = dialog.showMessageBoxSync(app.mainWindow, {
+              type: 'question',
+              message: intl.formatMessage(messages.deleteService),
+              detail: intl.formatMessage(messages.confirmDeleteService, {
+                serviceName: service?.name || recipe.name,
+              }),
+              buttons: [
+                intl.formatMessage(globalMessages.yes),
+                intl.formatMessage(globalMessages.no),
+              ],
+            });
+            if (selection === 0) {
+              onDelete();
+            }
+          }}
+        />
+        <ReactTooltip
+          id="tooltip-delete-service-offline"
+          place="top"
+          variant="dark"
+          style={{ height: 'auto' }}
+        />
+      </>
     );
 
     const clearCacheButton = (
