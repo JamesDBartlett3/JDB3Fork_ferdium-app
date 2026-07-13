@@ -11,7 +11,6 @@ import type Service from '../../../models/Service';
 import FAB from '../../ui/FAB';
 import Infobox from '../../ui/Infobox';
 import SearchInput from '../../ui/SearchInput';
-import Button from '../../ui/button';
 import Appear from '../../ui/effects/Appear';
 import { H1 } from '../../ui/headline';
 import Loader from '../../ui/loader';
@@ -54,10 +53,6 @@ const messages = defineMessages({
     id: 'settings.services.deletedInfo',
     defaultMessage: 'Service has been deleted',
   },
-  syncNow: {
-    id: 'settings.services.syncNow',
-    defaultMessage: 'Sync with server',
-  },
 });
 
 interface IProps extends WrappedComponentProps {
@@ -71,8 +66,6 @@ interface IProps extends WrappedComponentProps {
   retryServicesRequest: () => void;
   status: any;
   searchNeedle: string | null;
-  syncServices: () => void;
-  isSyncingServices: boolean;
 }
 
 @observer
@@ -89,8 +82,6 @@ class ServicesDashboard extends Component<IProps> {
       retryServicesRequest,
       status,
       searchNeedle = '',
-      syncServices,
-      isSyncingServices,
       intl,
     } = this.props;
 
@@ -98,12 +89,6 @@ class ServicesDashboard extends Component<IProps> {
       <div className="settings__main">
         <div className="settings__header">
           <H1>{intl.formatMessage(messages.headline)}</H1>
-          <Button
-            buttonType="secondary"
-            onClick={syncServices}
-            label={intl.formatMessage(messages.syncNow)}
-            busy={isSyncingServices}
-          />
         </div>
         <div className="settings__body">
           {(services.length > 0 || searchNeedle) && !isLoading && (

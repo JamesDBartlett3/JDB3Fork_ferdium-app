@@ -683,9 +683,16 @@ export default class ServicesStore extends TypedStore {
   }
 
   @action async _deleteService({ serviceId, redirect }): Promise<void> {
+    // eslint-disable-next-line no-console
+    console.log(`[ServicesStore] _deleteService started for service: ${serviceId}`);
+
     if (!(await this.stores.requests._verifyServerWritable())) {
       debug(
         '_deleteService: blocked — server not available or account is offline-only',
+      );
+      // eslint-disable-next-line no-console
+      console.log(
+        `[ServicesStore] _deleteService blocked for service: ${serviceId} - server not writable`,
       );
       return;
     }
@@ -696,13 +703,41 @@ export default class ServicesStore extends TypedStore {
       await request.promise;
       this.actionStatus = request.result.status;
 
+      // eslint-disable-next-line no-console
+      console.log(
+        `[ServicesStore] _deleteService server delete succeeded for ${serviceId}, local count before patch: ${
+          this.allServicesRequest.result?.length || 0
+        }`,
+      );
+
       // --- Remove from local state ONLY after server succeeds ---
       this.allServicesRequest.patch((result: Service[]) => {
+        if (!result) {
+          // eslint-disable-next-line no-console
+          console.log(
+            `[ServicesStore] _deleteService patch: result is falsy, skipping remove`,
+          );
+          return;
+        }
+        const countBefore = result.length;
         remove(result, (c: Service) => c.id === serviceId);
+        // eslint-disable-next-line no-console
+        console.log(
+          `[ServicesStore] _deleteService patch: removed service, count before: ${countBefore}, count after: ${result.length}`,
+        );
       });
       this._queuePersistServicesCache();
+
+      // eslint-disable-next-line no-console
+      console.log(
+        `[ServicesStore] _deleteService local count after patch: ${
+          this.allServicesRequest.result?.length || 0
+        }`,
+      );
     } catch (error) {
       debug('_deleteService: server write failed, write blocked', error);
+      // eslint-disable-next-line no-console
+      console.log(`[ServicesStore] _deleteService error: ${error}`, error);
       return;
     }
 
@@ -1257,8 +1292,22 @@ export default class ServicesStore extends TypedStore {
 
   async _syncFromServer() {
     try {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[ServicesStore] _syncFromServer started, local count: ${
+          this.allServicesRequest.result?.length || 0
+        }`,
+      );
+
       const serverServices = await this.syncServicesRequest.execute().promise;
       const localServices = this.allServicesRequest.result || [];
+
+      // eslint-disable-next-line no-console
+      console.log(
+        `[ServicesStore] _syncFromServer fetched: server count: ${
+          serverServices?.length || 0
+        }, local count: ${localServices.length}`,
+      );
 
       // When there are no local services yet (e.g. empty cache on startup or
       // right after login), there is nothing to lose, so adopt the server
@@ -1267,15 +1316,26 @@ export default class ServicesStore extends TypedStore {
         localServices.length > 0 &&
         hasServicesSyncConflict(localServices, serverServices)
       ) {
+        // eslint-disable-next-line no-console
+        console.log(`[ServicesStore] _syncFromServer detected conflict!`);
         runInAction(() => {
           this.pendingServerSyncServices = serverServices;
         });
         return;
       }
 
+      // eslint-disable-next-line no-console
+      console.log(
+        `[ServicesStore] _syncFromServer no conflict, applying server services`,
+      );
       await this._applyServerServices(serverServices);
     } catch (error) {
       debug('ServicesStore::_syncFromServer failed, using local cache', error);
+      // eslint-disable-next-line no-console
+      console.log(
+        `[ServicesStore] _syncFromServer error: ${error}`,
+        error,
+      );
       throw error;
     }
   }
