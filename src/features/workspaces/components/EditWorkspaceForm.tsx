@@ -81,6 +81,7 @@ interface IProps extends WithStylesProps<typeof styles>, WrappedComponentProps {
   updateWorkspaceRequest: Request;
   deleteWorkspaceRequest: Request;
   isServerConnected?: boolean;
+  hasPendingSyncConflict?: boolean;
 }
 
 @observer
@@ -163,12 +164,13 @@ class EditWorkspaceForm extends Component<IProps> {
       updateWorkspaceRequest,
       intl,
       isServerConnected = true,
+      hasPendingSyncConflict = false,
     } = this.props;
     const { form } = this;
     const workspaceServices = form.$('services').value;
     const isDeleting = deleteWorkspaceRequest.isExecuting;
     const isSaving = updateWorkspaceRequest.isExecuting;
-    const isDisabled = !isServerConnected;
+    const isDisabled = !isServerConnected || hasPendingSyncConflict;
 
     return (
       <div className="settings__main">

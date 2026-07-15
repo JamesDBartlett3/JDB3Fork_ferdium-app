@@ -84,6 +84,7 @@ class SettingsContainer extends Component<IProps> {
           closeSettings={closeSettings}
           serverHealthCheckLoading={stores!.requests.serverHealthCheckLoading}
           serverConnection={stores!.requests.serverConnection}
+          hasPendingSyncConflict={stores!.services.hasPendingSyncConflict}
         >
           <Outlet />
         </Layout>

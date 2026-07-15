@@ -22,6 +22,7 @@ class WorkspacesScreen extends Component<IProps> {
     const { actions, stores } = this.props;
     const isRemoteAccount = stores!.settings.all.app.server !== LOCAL_SERVER;
     const isServerConnected = stores!.requests.serverConnection === 'connected';
+    const { hasPendingSyncConflict } = stores!.services;
 
     return (
       <ErrorBoundary>
@@ -38,6 +39,7 @@ class WorkspacesScreen extends Component<IProps> {
           isServerConnected={
             isServerConnected && !isRemoteAccount ? true : isServerConnected
           }
+          hasPendingSyncConflict={hasPendingSyncConflict}
         />
       </ErrorBoundary>
     );

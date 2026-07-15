@@ -40,6 +40,7 @@ interface IProps extends WithStylesProps<typeof styles>, WrappedComponentProps {
   isSubmitting: boolean;
   onSubmit: (...args: any[]) => void;
   isServerConnected?: boolean;
+  hasPendingSyncConflict?: boolean;
 }
 
 @observer
@@ -77,9 +78,10 @@ class CreateWorkspaceForm extends Component<IProps> {
       isSubmitting,
       intl,
       isServerConnected = true,
+      hasPendingSyncConflict = false,
     } = this.props;
     const { form } = this;
-    const isDisabled = !isServerConnected;
+    const isDisabled = !isServerConnected || hasPendingSyncConflict;
 
     return (
       <div className={classes.form}>

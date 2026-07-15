@@ -1,4 +1,4 @@
-import { readJsonSync } from 'fs-extra';
+import { readJson } from 'fs-extra';
 import { type IReactionDisposer, autorun } from 'mobx';
 import { inject, observer } from 'mobx-react';
 import { Component, type ReactElement } from 'react';
@@ -62,7 +62,6 @@ class RecipesScreen extends Component<IProps, IState> {
   constructor(props: IProps) {
     super(props);
 
-    this.customRecipes = readJsonSync(asarRecipesPath('all.json'));
     this.state = {
       needle: null,
       currentFilter: 'featured',
@@ -70,6 +69,20 @@ class RecipesScreen extends Component<IProps, IState> {
   }
 
   componentDidMount(): void {
+    // Load custom recipes asynchronously to prevent blocking the UI
+    readJson(asarRecipesPath('all.json'))
+      .then(recipes => {
+        this.customRecipes = recipes;
+        // Trigger a re-render if we're on the 'all' filter and recipes were loaded
+        if (this.state.currentFilter === 'all') {
+          this.forceUpdate();
+        }
+      })
+      .catch(error => {
+        console.error('Failed to load custom recipes:', error);
+        this.customRecipes = [];
+      });
+
     this.autorunDisposer = autorun(() => {
       const { filter } = this.props.params;
       const { currentFilter } = this.state;
@@ -229,6 +242,7 @@ class RecipesScreen extends Component<IProps, IState> {
             appActions.openExternalUrl({ url: FERDIUM_DEV_DOCS })
           }
           isServerReachable={requests.serverConnection === 'connected'}
+          hasPendingSyncConflict={services.hasPendingSyncConflict}
         />
       </ErrorBoundary>
     );

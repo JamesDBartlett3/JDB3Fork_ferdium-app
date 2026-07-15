@@ -52,6 +52,7 @@ interface IProps extends WrappedComponentProps {
   onSubmit: FormEventHandler<HTMLFormElement>;
   isSaving: boolean;
   isServerConnected?: boolean;
+  hasPendingSyncConflict?: boolean;
 }
 
 @observer
@@ -75,9 +76,10 @@ class EditUserForm extends Component<IProps> {
       isSaving,
       intl,
       isServerConnected = true,
+      hasPendingSyncConflict = false,
     } = this.props;
 
-    const isDisabled = !isServerConnected;
+    const isDisabled = !isServerConnected || hasPendingSyncConflict;
 
     return (
       <div className="settings__main">
@@ -95,7 +97,9 @@ class EditUserForm extends Component<IProps> {
         <div className="settings__body">
           {isDisabled && (
             <Infobox type="warning" icon="alert-circle-outline">
-              Settings are not available while server is offline
+              {hasPendingSyncConflict
+                ? 'Settings are not available while a server sync conflict is pending'
+                : 'Settings are not available while server is offline'}
             </Infobox>
           )}
           <form onSubmit={e => this.submit(e)} id="form">
@@ -126,7 +130,11 @@ class EditUserForm extends Component<IProps> {
               }}
             >
               <Input {...form.$('email').bind()} disabled={isDisabled} />
-              <Radio field={form.$('accountType')} className="" />
+              <Radio
+                field={form.$('accountType')}
+                className=""
+                disabled={isDisabled}
+              />
               {form.$('accountType').value === 'company' && (
                 <Input
                   {...form.$('organization').bind()}

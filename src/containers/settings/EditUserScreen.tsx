@@ -139,6 +139,7 @@ class EditUserScreen extends Component<EditUserScreenProps> {
     const form = this.prepareForm(user.data);
     const isServerConnected =
       this.props.stores.requests.serverConnection === 'connected';
+    const { hasPendingSyncConflict } = this.props.stores.services;
 
     return (
       <ErrorBoundary>
@@ -148,6 +149,7 @@ class EditUserScreen extends Component<EditUserScreenProps> {
           isSaving={user.updateUserInfoRequest.isExecuting}
           onSubmit={d => this.onSubmit(d)}
           isServerConnected={isServerConnected}
+          hasPendingSyncConflict={hasPendingSyncConflict}
         />
       </ErrorBoundary>
     );

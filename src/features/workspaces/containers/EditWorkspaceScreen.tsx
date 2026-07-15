@@ -35,6 +35,7 @@ class EditWorkspaceScreen extends Component<StoresProps> {
 
     const isRemoteAccount = stores.settings.all.app.server !== LOCAL_SERVER;
     const isServerConnected = stores.requests.serverConnection === 'connected';
+    const { hasPendingSyncConflict } = stores.services;
 
     return (
       <ErrorBoundary>
@@ -48,6 +49,7 @@ class EditWorkspaceScreen extends Component<StoresProps> {
           isServerConnected={
             isServerConnected && !isRemoteAccount ? true : isServerConnected
           }
+          hasPendingSyncConflict={hasPendingSyncConflict}
         />
       </ErrorBoundary>
     );

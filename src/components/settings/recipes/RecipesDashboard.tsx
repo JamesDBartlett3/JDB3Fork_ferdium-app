@@ -126,6 +126,7 @@ interface IProps extends WithStylesProps<typeof styles>, WrappedComponentProps {
   openRecipeDirectory: () => void;
   openDevDocs: () => void;
   isServerReachable: boolean;
+  hasPendingSyncConflict?: boolean;
 }
 
 interface IState {
@@ -155,6 +156,7 @@ class RecipesDashboard extends Component<IProps, IState> {
       openRecipeDirectory,
       openDevDocs,
       isServerReachable,
+      hasPendingSyncConflict = false,
       classes,
       intl,
     } = this.props;
@@ -162,9 +164,11 @@ class RecipesDashboard extends Component<IProps, IState> {
     const communityRecipes = recipes.filter(r => !r.isDevRecipe);
     const devRecipes = recipes.filter(r => r.isDevRecipe);
 
-    const recipeDisabled = !isServerReachable;
+    const recipeDisabled = !isServerReachable || hasPendingSyncConflict;
     const recipeDisabledTooltip = intl.formatMessage(
-      messages.offlineCreateTooltip,
+      hasPendingSyncConflict
+        ? messages.offlineCreateTooltip
+        : messages.offlineCreateTooltip,
     );
 
     return (

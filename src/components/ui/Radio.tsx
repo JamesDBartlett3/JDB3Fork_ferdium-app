@@ -10,6 +10,7 @@ type Props = {
   className: string;
   focus?: boolean;
   showLabel?: boolean;
+  disabled?: boolean;
 };
 
 // TODO: Should this file be converted into the coding style similar to './toggle/index.tsx'?
@@ -28,7 +29,7 @@ class Radio extends Component<Props> {
   }
 
   render() {
-    const { field, className, showLabel = true } = this.props;
+    const { field, className, showLabel = true, disabled = false } = this.props;
 
     return (
       <div
@@ -43,7 +44,13 @@ class Radio extends Component<Props> {
             {field.label}
           </label>
         )}
-        <div className="franz-form__radio-wrapper">
+        <div
+          className="franz-form__radio-wrapper"
+          style={{
+            opacity: disabled ? 0.6 : 1,
+            pointerEvents: disabled ? 'none' : 'auto',
+          }}
+        >
           {/* @ts-expect-error Property 'map' does not exist on type 'OptionsModel'. */}
           {field.options?.map(type => (
             <label
@@ -59,8 +66,9 @@ class Radio extends Component<Props> {
                 type="radio"
                 name="type"
                 value={type.value}
-                onChange={field.onChange}
+                onChange={disabled ? undefined : field.onChange}
                 checked={field.value === type.value}
+                disabled={disabled}
               />
               {type.label}
             </label>

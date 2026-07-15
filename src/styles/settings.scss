@@ -187,6 +187,15 @@
     background: #fff;
   }
 
+  .settings__content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    height: auto;
+    min-width: 0;
+    overflow: hidden;
+  }
+
   .settings__hr {
     color: rgba($theme-gray, 0.2);
   }
