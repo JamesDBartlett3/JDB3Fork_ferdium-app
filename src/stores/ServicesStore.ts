@@ -684,7 +684,9 @@ export default class ServicesStore extends TypedStore {
 
   @action async _deleteService({ serviceId, redirect }): Promise<void> {
     // eslint-disable-next-line no-console
-    console.log(`[ServicesStore] _deleteService started for service: ${serviceId}`);
+    console.log(
+      `[ServicesStore] _deleteService started for service: ${serviceId}`,
+    );
 
     if (!(await this.stores.requests._verifyServerWritable())) {
       debug(
@@ -715,7 +717,7 @@ export default class ServicesStore extends TypedStore {
         if (!result) {
           // eslint-disable-next-line no-console
           console.log(
-            `[ServicesStore] _deleteService patch: result is falsy, skipping remove`,
+            '[ServicesStore] _deleteService patch: result is falsy, skipping remove',
           );
           return;
         }
@@ -1317,7 +1319,7 @@ export default class ServicesStore extends TypedStore {
         hasServicesSyncConflict(localServices, serverServices)
       ) {
         // eslint-disable-next-line no-console
-        console.log(`[ServicesStore] _syncFromServer detected conflict!`);
+        console.log('[ServicesStore] _syncFromServer detected conflict!');
         runInAction(() => {
           this.pendingServerSyncServices = serverServices;
         });
@@ -1326,16 +1328,13 @@ export default class ServicesStore extends TypedStore {
 
       // eslint-disable-next-line no-console
       console.log(
-        `[ServicesStore] _syncFromServer no conflict, applying server services`,
+        '[ServicesStore] _syncFromServer no conflict, applying server services',
       );
       await this._applyServerServices(serverServices);
     } catch (error) {
       debug('ServicesStore::_syncFromServer failed, using local cache', error);
       // eslint-disable-next-line no-console
-      console.log(
-        `[ServicesStore] _syncFromServer error: ${error}`,
-        error,
-      );
+      console.log(`[ServicesStore] _syncFromServer error: ${error}`, error);
       throw error;
     }
   }
