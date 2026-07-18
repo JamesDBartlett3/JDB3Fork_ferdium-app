@@ -1,17 +1,17 @@
-# Offline-Aware Service Writes
+# Offline Behavior for Service Writes
 
-This document describes the offline-resilience strategy for service write
-operations (create, update, delete, reorder) and explains what is deliberately
-**deferred** to a future version, so maintainers can evaluate the approach and
-provide direction.
+This document describes how service write operations (create, update, delete,
+reorder) behave when the Ferdium server is unreachable. The current approach
+is intentionally conservative: writes are server-required rather than queued
+or applied optimistically.
 
 ## Background
 
 The client maintains a local cache of the user's services (in `localStorage`,
 token-scoped). When the Ferdium server is unreachable, the client can still
-*read* from this cache, so existing services remain usable. This PR extends
-that resilience to *writes*, but with an important asymmetry between creation
-and mutation.
+_read_ from this cache, so existing services remain usable. This PR keeps
+_writes_ server-dependent: if the server cannot be reached, the write is not
+performed and the local cache is left unchanged.
 
 ## What this PR implements
 
@@ -30,6 +30,7 @@ keys off the service ID. Swapping a placeholder ID for a real one after sync
 would orphan the webview's session data (cookies, localStorage, login state).
 
 **UI surfaces gated:**
+
 - Recipe picker items (`RecipeItem.tsx`) — greyed out + tooltip
 - Sidebar "+" button (`Sidebar.tsx`) — greyed out + tooltip
 - EditServiceScreen save button (`EditServiceForm.tsx`) — disabled + tooltip
@@ -37,19 +38,33 @@ would orphan the webview's session data (cookies, localStorage, login state).
 - SetupAssistant submit button (`SetupAssistant.tsx`) — disabled + tooltip
   (the "Skip" button remains enabled since it creates nothing)
 
-### 2. Service mutations are queued for deferred sync
+### 2. Service mutations are blocked when the server is offline
 
 Update, delete, and reorder operate on **existing** IDs, so they don't have
-the ID-mismatch problem. These are handled optimistically:
+the ID-mismatch problem. Rather than applying changes optimistically and
+queueing them for retry, the current implementation requires the server write
+to succeed before local state is updated:
 
-1. The local cache is patched immediately (the user sees their change).
-2. The server write is attempted.
-3. If the server is unreachable, the write is enqueued in a persistent queue
-   (`services-write-queue.ts`, stored in `localStorage`, token-scoped).
-4. When the server comes back, `RequestStore._flushPendingWritesThenSync()`
-   replays the queue **before** the normal server sync runs. This ordering is
-   critical: `_applyServerServices` does a wholesale replacement of local
-   state, so pending writes must land on the server first or they'd be lost.
+1. The write is attempted on the server first.
+2. Only if the server write succeeds is the local cache patched.
+3. If the server is unreachable, the write fails immediately and the local
+   cache remains unchanged.
+
+There is no persistent write queue in this iteration. `ServicesStore.hasPendingWrites`
+always returns `false`, and `ServicesStore._flushPendingWrites()` is currently
+a no-op. These hooks are intentionally left in place as scaffolding for the
+next iteration, when optimistic local updates plus queued deferred sync will
+be implemented. The `_queuePersistServicesCache` helper is unrelated to write
+queueing; it just persists the current service list to `localStorage` after
+successful changes.
+
+Queuing and replaying service mutations for deferred server sync is being
+deferred to the next iteration. Implementing it safely requires changes to
+the way `ferdium-server` handles and responds to mutation requests (for
+example: authoritative timestamps for conflict detection, idempotency keys,
+or a structured batch-sync endpoint). Until those server-side API changes are
+in place, the client keeps mutations server-required so it cannot introduce
+conflicts or lost updates during an outage.
 
 ### 3. Exponential backoff for server-retry polling
 
@@ -57,67 +72,57 @@ The auto-retry loop (`RequestStore._autoRetry`) uses an explicit backoff
 schedule to avoid hammering a struggling or recovering server:
 
 | Attempt | Interval |
-|---------|----------|
+| ------- | -------- |
 | 1       | 30s      |
 | 2       | 1m       |
 | 3       | 5m       |
 | 4       | 15m      |
 | 5+      | 1h (cap) |
 
-The schedule resets to 30s when:
+This polling only checks whether the server is reachable again; it does not
+flush any queued writes, because writes are not queued. The schedule resets
+to 30s when:
+
 - The user manually clicks "Retry sync" (starts fresh), OR
 - The server comes back online (automatic recovery).
 
-## What is deferred (and why)
+## What is out of scope (and why)
 
-The following are deliberately **out of scope** for this PR. We'd welcome
-maintainer feedback on whether and how to approach them.
+### A. Queued sync for service mutations
 
-### A. Offline service creation (placeholder ID + partition migration)
+As described above, update / delete / reorder currently fail immediately when
+the server is unreachable. A future iteration may apply those changes
+optimistically to the local cache and enqueue them for deferred replay once
+the server is reachable again. That work depends on `ferdium-server` API
+changes: the server will need to handle out-of-order or duplicate mutations,
+expose conflict-resolution metadata (e.g., server timestamps), and/or
+provide a batch sync endpoint that the client can replay against safely.
+Until those changes are designed and deployed, mutation queueing is out of
+scope.
 
-**The goal:** Let users create new services while the server is offline, with
-a locally-generated placeholder ID, then swap it for the server-assigned ID
-on reconnect.
+### B. Offline service creation
 
-**Why it's hard:** The Electron session partition for each service is
-`persist:service-${id}` (`Service.ts:416`, `index.ts:693/717/737/804`). When
-the placeholder ID is swapped for the real one, the partition name changes.
-Any cookies, login state, or localStorage the user accumulated in the service
-webview while offline would be orphaned. A proper fix requires migrating
-Electron session data between partition names at swap time — a non-trivial
-Electron-level operation.
+Service creation remains impossible while the server is offline. The
+placeholder-ID approach described above could theoretically be built, but it
+would require migrating Electron session data between partition names when
+the placeholder ID is swapped for the server-assigned ID. That is a non-
+trivial Electron-level operation, so creation stays blocked for now.
 
-**Alternative considered:** Block the webview from loading while the service
-is in a pending-sync state. This avoids the partition problem but means the
-service isn't actually usable while offline, which undermines the goal.
-
-### B. UserStore writes (profile update, account deletion)
+### C. UserStore writes (profile update, account deletion)
 
 `UserStore._update` (`PUT /v1/me`) and `_delete` (`DELETE /v1/me`) are
 infrequent operations that users rarely perform during a server outage. They
 remain online-only. Low priority.
 
-### C. Multi-client write conflict resolution for queued writes
-
-If two clients edit the same service while both are offline, then both
-reconnect, the writes replay in arrival order — last writer wins. The existing
-read-side conflict UI (`hasPendingSyncConflict`, the "Use server version"
-banner) handles the *read* path, but there's no equivalent prompt for
-*write* conflicts. A more sophisticated approach (e.g., CRDTs, or a
-server-side timestamp-based conflict detection) would be needed for true
-multi-client offline collaboration.
-
 ## Key files
 
-| File | Purpose |
-|------|---------|
-| `src/stores/utils/services-write-queue.ts` | Persistent write queue module |
-| `src/stores/RequestStore.ts` | `isServerReachable`, exponential backoff, flush-on-recovery |
-| `src/stores/ServicesStore.ts` | Optimistic write + enqueue, `_flushPendingWrites` |
-| `src/components/settings/recipes/RecipeItem.tsx` | Disabled state + tooltip |
-| `src/components/layout/Sidebar.tsx` | Disabled "+" button |
-| `src/components/settings/services/EditServiceForm.tsx` | Disabled save button |
-| `src/components/auth/SetupAssistant.tsx` | Disabled submit button |
-| `src/styles/recipes.scss` | `.recipe-teaser--disabled` |
-| `src/styles/layout.scss` | `.sidebar__button--disabled` |
-| `test/stores/utils/services-write-queue.test.ts` | Queue unit tests |
+| File                                                   | Purpose                                                                           |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `src/stores/RequestStore.ts`                           | `serverConnection` state, `isWriteLocked`, exponential backoff                    |
+| `src/stores/ServicesStore.ts`                          | Server-first writes for create/update/delete/reorder, scaffolding for queued sync |
+| `src/components/settings/recipes/RecipeItem.tsx`       | Disabled state + tooltip                                                          |
+| `src/components/layout/Sidebar.tsx`                    | Disabled "+" button                                                               |
+| `src/components/settings/services/EditServiceForm.tsx` | Disabled save button                                                              |
+| `src/components/auth/SetupAssistant.tsx`               | Disabled submit button                                                            |
+| `src/styles/recipes.scss`                              | `.recipe-teaser--disabled`                                                        |
+| `src/styles/layout.scss`                               | `.sidebar__button--disabled`                                                      |
