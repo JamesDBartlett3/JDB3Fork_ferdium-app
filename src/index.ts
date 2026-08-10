@@ -13,6 +13,7 @@ import {
 } from 'electron';
 
 import { initialize } from 'electron-react-titlebar/main';
+import { setupWebAuthn } from 'electron-webauthn-linux';
 import windowStateKeeper from 'electron-window-state';
 import { emptyDirSync, ensureFileSync } from 'fs-extra';
 import minimist from 'minimist';
@@ -259,8 +260,9 @@ const createWindow = () => {
       enableWebContents(contents);
 
       // Set permission handlers on service webview sessions.
-      // This explicitly allows safe permissions and denies unknown ones,
-      // and enables HID/USB/Serial for hardware FIDO2 security key detection.
+      // setPermissionRequestHandler allows safe permissions and denies unknown ones.
+      // setPermissionCheckHandler additionally allows hid/serial/usb feature detection
+      // (actual device access is gated by select-hid-device/select-usb-device events).
       const ses = contents.session;
       if (!(ses as any)._permissionHandlersSet) {
         (ses as any)._permissionHandlersSet = true;
@@ -308,7 +310,6 @@ const createWindow = () => {
           return allowedChecks.includes(permission);
         });
       }
-
       contents.setWindowOpenHandler(({ url, disposition }) => {
         // OAuth popups (Google, Microsoft, etc.) are opened via window.open()
         // and need window.opener preserved so the parent can receive the
@@ -321,11 +322,21 @@ const createWindow = () => {
             overrideBrowserWindowOptions: {
               parent: mainWindow,
               fullscreenable: false,
-              webPreferences: { session: contents.session },
+              webPreferences: isLinux
+                ? {
+                    session: contents.session,
+                    preload: join(
+                      __dirname,
+                      'webview',
+                      'webauthn-popup-preload.js',
+                    ),
+                    contextIsolation: true,
+                    sandbox: true,
+                  }
+                : { session: contents.session },
             },
           };
         }
-
         // Regular link clicks → open in the user's default browser.
         openExternalUrl(url);
         return { action: 'deny' };
@@ -335,7 +346,6 @@ const createWindow = () => {
         enableWebContents(child.webContents);
         child.webContents.setWebRTCIPHandlingPolicy(webRTCIPHandlingPolicy);
       });
-
       // Handle will download event from main process (prevent download dialog)
       contents.session.on('will-download', (_e, item) => {
         const downloadFolderPath = retrieveSettingValue(
@@ -605,6 +615,16 @@ app.on('ready', () => {
   }
 
   initialize();
+
+  // Initialize WebAuthn/passkey support on Linux
+  if (isLinux) {
+    setupWebAuthn({
+      storagePath: userDataPath(),
+      enableHardwareKeys: true,
+    }).catch(error => {
+      debug('WebAuthn setup failed:', error.message);
+    });
+  }
 
   createWindow();
 });
