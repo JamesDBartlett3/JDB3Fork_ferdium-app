@@ -10,6 +10,10 @@ jobs:
   bump-casks:
     runs-on: macos-14
     steps:
+      - name: Trust Ferdium Homebrew tap
+        run: |
+          brew tap ferdium/ferdium
+          brew trust ferdium/ferdium
       - name: Publish nightly
         uses: friesi23/action-homebrew-bump-cask@v2
         if: ${{ contains(github.event.release.tag_name, 'nightly') }}
