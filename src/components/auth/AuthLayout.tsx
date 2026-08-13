@@ -11,7 +11,7 @@ import {
 import { type WrappedComponentProps, injectIntl } from 'react-intl';
 import { serverName } from '../../api/apiBase';
 import { GITHUB_FERDIUM_URL } from '../../config';
-import { isSnap, isWayland, isWindows } from '../../environment';
+import { isSnap, isWindows } from '../../environment';
 import { Component as PublishDebugInfo } from '../../features/publishDebugInfo';
 import { updateVersionParse } from '../../helpers/update-helpers';
 import globalMessages from '../../i18n/globalMessages';
@@ -70,11 +70,10 @@ class AuthLayout extends Component<IProps, IState> {
 
     return (
       <>
-        {(isWindows || isWayland) && !isFullScreen && (
+        {isWindows && !isFullScreen && (
           <TitleBar
             menu={window['ferdium'].menu.template}
-            icon={isWindows ? 'assets/images/logo.svg' : undefined}
-            className={isWayland ? 'wayland-menu-bar' : undefined}
+            icon="assets/images/logo.svg"
           />
         )}
         <div className="auth">
