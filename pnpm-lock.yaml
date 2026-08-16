@@ -5660,6 +5660,7 @@ packages:
   mobx-react-form@6.10.1:
     resolution: {integrity: sha512-Z99lrbNL1tboSfZPvykSDE/6OnoonHzfwKN/hWpWm3sKHEvYDL+F6c9sDb4iR9ep/gbWj+UZZgVPFjMbkdu1YQ==}
     engines: {node: '>=8.0.0'}
+    deprecated: 'deprecated: package renamed to mobx-formkit. Migrate with: npm i mobx-formkit — see https://github.com/foxhound87/mobx-formkit'
     peerDependencies:
       mobx: ^6.0.0
 
