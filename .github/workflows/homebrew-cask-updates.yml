@@ -3,6 +3,7 @@ name: Homebrew cask updates
 on:
   release:
     types: [published]
+
   # Manual trigger from the UI
   workflow_dispatch:
     inputs:
@@ -14,6 +15,11 @@ on:
           - nightly
           - beta
           - stable
+
+      tag:
+        description: 'Release tag to publish (e.g. v7.x.x-nightly.xxxx, v7.x.x-beta.xxxx, v7.x.x)'
+        required: true
+        type: string
 
 jobs:
   bump-casks:
@@ -35,7 +41,7 @@ jobs:
           tap: ferdium/homebrew-ferdium
           # Bump only these casks if outdated
           cask: ferdium-nightly
-          livecheck: true
+          tag: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
           dryrun: false
 
       - name: Publish beta
@@ -48,7 +54,7 @@ jobs:
           tap: ferdium/homebrew-ferdium
           # Bump only these casks if outdated
           cask: ferdium-beta
-          livecheck: true
+          tag: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
           dryrun: false
 
       - name: Publish release
@@ -61,5 +67,5 @@ jobs:
           tap: ferdium/homebrew-ferdium
           # Bump only these casks if outdated
           cask: ferdium
-          livecheck: true
+          tag: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
           dryrun: false
