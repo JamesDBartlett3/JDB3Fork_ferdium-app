@@ -3,10 +3,10 @@ import { Component, type ReactElement, type ReactPortal } from 'react';
 import ReactDOM from 'react-dom';
 import { Outlet } from 'react-router-dom';
 import type { StoresProps } from '../../@types/ferdium-components.types';
-import { LOCAL_SERVER } from '../../config';
 import Layout from '../../components/settings/SettingsLayout';
 import Navigation from '../../components/settings/navigation/SettingsNavigation';
 import ErrorBoundary from '../../components/util/ErrorBoundary';
+import { LOCAL_SERVER } from '../../config';
 import { workspaceStore } from '../../features/workspaces';
 
 interface IProps extends Partial<StoresProps> {}

@@ -29,10 +29,10 @@ import { SPELLCHECKER_LOCALES } from '../i18n/languages';
 import { cleanseJSObject } from '../jsUtils';
 import type { UnreadServices } from '../lib/dbus/Ferdium';
 import type Service from '../models/Service';
-import { hasServicesSyncConflict } from './utils/services-sync-conflict';
 import CachedRequest from './lib/CachedRequest';
 import Request from './lib/Request';
 import TypedStore from './lib/TypedStore';
+import { hasServicesSyncConflict } from './utils/services-sync-conflict';
 
 const debug = require('../preload-safe-debug')('Ferdium:ServiceStore');
 

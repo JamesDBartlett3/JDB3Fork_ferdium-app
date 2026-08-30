@@ -54,6 +54,12 @@ export default class RequestStore extends TypedStore {
 
   _isBackoffScheduled: boolean = false;
 
+  _backoffTimer: ReturnType<typeof setTimeout> | null = null;
+
+  _connectionCheckId: number = 0;
+
+  _activeHealthCheckId: number | null = null;
+
   constructor(stores: Stores, api: ApiInterface, actions: Actions) {
     super(stores, api, actions);
 
@@ -122,6 +128,7 @@ export default class RequestStore extends TypedStore {
 
   @action _retryRequiredRequests(): void {
     // User-initiated retry: reset the backoff schedule and check connection.
+    this._clearScheduledRetry();
     this._backoffIndex = 0;
     this._checkServerConnection();
   }
@@ -131,15 +138,20 @@ export default class RequestStore extends TypedStore {
    * attempts a sync, and resolves to 'connected' or 'disconnected'.
    */
   async _checkServerConnection(): Promise<void> {
+    this._clearScheduledRetry();
+    this._connectionCheckId += 1;
+    const checkId = this._connectionCheckId;
     runInAction(() => {
       this.serverConnection = 'connecting';
     });
     try {
       await this.stores.services._syncFromServer();
+      if (checkId !== this._connectionCheckId) return;
       runInAction(() => {
         this.serverConnection = 'connected';
       });
     } catch {
+      if (checkId !== this._connectionCheckId) return;
       runInAction(() => {
         this.serverConnection = 'disconnected';
       });
@@ -161,8 +173,14 @@ export default class RequestStore extends TypedStore {
    * - On check failure, sets 'disconnected'
    */
   @action async checkServerHealth(): Promise<void> {
+    this._connectionCheckId += 1;
+    const checkId = this._connectionCheckId;
+    this._activeHealthCheckId = checkId;
+
     // Local-only accounts are always "connected" (no server needed)
     if (this.stores.settings.all.app.server === LOCAL_SERVER) {
+      this._clearScheduledRetry();
+      this._activeHealthCheckId = null;
       runInAction(() => {
         this.serverConnection = 'connected';
         this.serverHealthCheckLoading = false;
@@ -180,12 +198,22 @@ export default class RequestStore extends TypedStore {
       debug('Health check for UI: checking server availability');
       await this.api.app.health();
       debug('Server health check passed — connection is live');
+      if (checkId !== this._connectionCheckId) {
+        this._finishHealthCheck(checkId);
+        return;
+      }
+      this._activeHealthCheckId = null;
       runInAction(() => {
         this.serverConnection = 'connected';
         this.serverHealthCheckLoading = false;
       });
     } catch (error) {
       debug('Server health check failed', error);
+      if (checkId !== this._connectionCheckId) {
+        this._finishHealthCheck(checkId);
+        return;
+      }
+      this._activeHealthCheckId = null;
       runInAction(() => {
         this.serverConnection = 'disconnected';
         this.serverHealthCheckLoading = false;
@@ -251,6 +279,23 @@ export default class RequestStore extends TypedStore {
   }
 
   // Reactions
+  _finishHealthCheck(checkId: number): void {
+    if (this._activeHealthCheckId === checkId) {
+      this._activeHealthCheckId = null;
+      runInAction(() => {
+        this.serverHealthCheckLoading = false;
+      });
+    }
+  }
+
+  _clearScheduledRetry(): void {
+    if (this._backoffTimer) {
+      clearTimeout(this._backoffTimer);
+      this._backoffTimer = null;
+    }
+    this._isBackoffScheduled = false;
+  }
+
   /**
    * Watches `serverConnection`. When disconnected, schedules the next backoff
    * attempt. When connected, resets the backoff index. When connecting, does
@@ -259,6 +304,7 @@ export default class RequestStore extends TypedStore {
    */
   _autoRetry(): void {
     if (this.serverConnection === 'connected') {
+      this._clearScheduledRetry();
       if (this._backoffIndex > 0) {
         runInAction(() => {
           this._backoffIndex = 0;
@@ -272,7 +318,12 @@ export default class RequestStore extends TypedStore {
     }
 
     // disconnected — schedule next backoff attempt
-    if (this.stores.user.isLoggedIn && !this._isBackoffScheduled) {
+    if (!this.stores.user.isLoggedIn) {
+      this._clearScheduledRetry();
+      return;
+    }
+
+    if (!this._isBackoffScheduled) {
       const delay =
         RETRY_INTERVALS_MS[
           Math.min(this._backoffIndex, RETRY_INTERVALS_MS.length - 1)
@@ -283,8 +334,9 @@ export default class RequestStore extends TypedStore {
         `Server disconnected — scheduling backoff attempt #${this._backoffIndex + 1} in ${delay / 1000}s`,
       );
 
-      setTimeout(
+      this._backoffTimer = setTimeout(
         action(() => {
+          this._backoffTimer = null;
           this._isBackoffScheduled = false;
           this._backoffIndex += 1;
           this._checkServerConnection();

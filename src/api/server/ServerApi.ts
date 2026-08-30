@@ -1,7 +1,7 @@
 /* eslint-disable import/no-import-module-exports */
 /* eslint-disable global-require */
-import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { join } from 'node:path';
 import {
   type PathOrFileDescriptor,
   copySync,

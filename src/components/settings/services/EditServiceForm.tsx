@@ -37,6 +37,11 @@ const messages = defineMessages({
     defaultMessage:
       "Can't create new services while the Ferdium server is offline. Please try again when the connection is restored.",
   },
+  offlineSaveTooltip: {
+    id: 'settings.service.form.offlineSaveTooltip',
+    defaultMessage:
+      "Can't save services while the Ferdium server is offline. Please try again when the connection is restored.",
+  },
   offlineDeleteTooltip: {
     id: 'settings.service.form.offlineDeleteTooltip',
     defaultMessage:
@@ -705,20 +710,16 @@ class EditServiceForm extends Component<IProps, IState> {
                 htmlForm="form"
                 disabled={
                   isFormDisabled ||
-                  (action !== 'edit' && !isServerReachable) ||
+                  !isServerReachable ||
                   (action !== 'edit' && form.isPristine && requiresUserInput)
                 }
                 data-tooltip-id={
-                  action !== 'edit' && (!isServerReachable || isFormDisabled)
-                    ? 'tooltip-save-service-offline'
-                    : undefined
+                  isServerReachable ? undefined : 'tooltip-save-service-offline'
                 }
                 data-tooltip-content={
-                  action !== 'edit' && isFormDisabled
-                    ? intl.formatMessage(messages.offlineCreateTooltip)
-                    : action !== 'edit' && !isServerReachable
-                      ? intl.formatMessage(messages.offlineCreateTooltip)
-                      : undefined
+                  isServerReachable
+                    ? undefined
+                    : intl.formatMessage(messages.offlineSaveTooltip)
                 }
               />
               <ReactTooltip

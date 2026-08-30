@@ -2,8 +2,8 @@ import { inject, observer } from 'mobx-react';
 import { Component } from 'react';
 
 import type { StoresProps } from '../../../@types/ferdium-components.types';
-import { LOCAL_SERVER } from '../../../config';
 import ErrorBoundary from '../../../components/util/ErrorBoundary';
+import { LOCAL_SERVER } from '../../../config';
 import { deleteWorkspaceRequest, updateWorkspaceRequest } from '../api';
 import EditWorkspaceForm from '../components/EditWorkspaceForm';
 import { workspaceStore } from '../index';

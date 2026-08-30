@@ -319,11 +319,20 @@ export default class WorkspacesStore extends FeatureStore {
     }
 
     const { services = [] } = this.activeWorkspace;
+    const reorderedServices = [...services];
+    reorderedServices.splice(
+      newIndex,
+      0,
+      reorderedServices.splice(oldIndex, 1)[0],
+    );
     try {
       // Send reorder to server BEFORE mutating local state
-      await updateWorkspaceRequest.execute(this.activeWorkspace).promise;
+      await updateWorkspaceRequest.execute({
+        ...this.activeWorkspace,
+        services: reorderedServices,
+      }).promise;
       // Move services from the old to the new position ONLY after server succeeds
-      services.splice(newIndex, 0, services.splice(oldIndex, 1)[0]);
+      services.splice(0, services.length, ...reorderedServices);
     } catch (error) {
       debug('reorderServicesOfActiveWorkspace: server write failed', error);
     }

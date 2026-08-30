@@ -9,11 +9,11 @@ import {
 import { Outlet } from 'react-router-dom';
 import type { StoresProps } from '../../@types/ferdium-components.types';
 import { isEscapeKeyPress } from '../../jsUtils';
+import type { ServerConnectionState } from '../../stores/RequestStore';
+import InfoBar from '../ui/InfoBar';
 import Appear from '../ui/effects/Appear';
 import Icon from '../ui/icon';
-import InfoBar from '../ui/InfoBar';
 import ErrorBoundary from '../util/ErrorBoundary';
-import type { ServerConnectionState } from '../../stores/RequestStore';
 
 const messages = defineMessages({
   closeSettings: {

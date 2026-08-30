@@ -22,7 +22,6 @@ interface IProps {
   enableService: (args: { serviceId: string }) => void;
   hibernateService: (args: { serviceId: string }) => void;
   wakeUpService: (args: { serviceId: string }) => void;
-  isServerConnected?: boolean;
 }
 
 @observer

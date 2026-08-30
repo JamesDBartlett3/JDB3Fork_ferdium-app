@@ -100,7 +100,6 @@ class TabBar extends Component<IProps> {
       showMessageBadgeWhenMutedSetting,
       showServiceNameSetting,
       showMessageBadgesEvenWhenMuted,
-      isServerConnected = true,
     } = this.props;
 
     const axis = useHorizontalStyle ? 'x' : 'y';
@@ -132,7 +131,6 @@ class TabBar extends Component<IProps> {
           showMessageBadgeWhenMutedSetting={showMessageBadgeWhenMutedSetting}
           showServiceNameSetting={showServiceNameSetting}
           showMessageBadgesEvenWhenMuted={showMessageBadgesEvenWhenMuted}
-          isServerConnected={isServerConnected}
         />
       </div>
     );

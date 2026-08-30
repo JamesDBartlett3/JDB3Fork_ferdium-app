@@ -11,10 +11,10 @@ import {
 import type { Params } from 'react-router-dom';
 import type { StoresProps } from '../../@types/ferdium-components.types';
 import RecipesDashboard from '../../components/settings/recipes/RecipesDashboard';
+import { H1 } from '../../components/ui/headline';
+import Infobox from '../../components/ui/infobox/index';
 import ErrorBoundary from '../../components/util/ErrorBoundary';
 import withParams from '../../components/util/WithParams';
-import Infobox from '../../components/ui/infobox/index';
-import { H1 } from '../../components/ui/headline';
 import {
   CUSTOM_WEBSITE_RECIPE_ID,
   FERDIUM_DEV_DOCS,
