@@ -36,9 +36,7 @@ class WorkspacesScreen extends Component<IProps> {
           onWorkspaceClick={(workspace: Workspace) =>
             actions.workspaces.edit({ workspace })
           }
-          isServerConnected={
-            isServerConnected && !isRemoteAccount ? true : isServerConnected
-          }
+          isServerConnected={!isRemoteAccount || isServerConnected}
           hasPendingSyncConflict={hasPendingSyncConflict}
         />
       </ErrorBoundary>

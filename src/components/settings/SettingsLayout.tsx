@@ -1,4 +1,4 @@
-import { mdiClose, mdiFlash, mdiLoading } from '@mdi/js';
+import { mdiClose, mdiFlash } from '@mdi/js';
 import { inject, observer } from 'mobx-react';
 import { Component, type ReactElement, type ReactNode } from 'react';
 import {
@@ -34,7 +34,6 @@ const messages = defineMessages({
 interface IProps extends WrappedComponentProps, Partial<StoresProps> {
   navigation: ReactElement;
   closeSettings: () => void;
-  serverHealthCheckLoading?: boolean;
   serverConnection?: ServerConnectionState;
   hasPendingSyncConflict?: boolean;
   // eslint-disable-next-line react/no-unused-prop-types
@@ -67,7 +66,6 @@ class SettingsLayout extends Component<IProps> {
       navigation,
       closeSettings,
       intl,
-      serverHealthCheckLoading = false,
       serverConnection = 'connected',
       hasPendingSyncConflict = false,
       stores,
@@ -103,54 +101,10 @@ class SettingsLayout extends Component<IProps> {
                 <Outlet
                   context={{
                     serverConnection,
-                    serverHealthCheckLoading,
                     hasPendingSyncConflict,
                   }}
                 />
               </div>
-              {serverHealthCheckLoading && (
-                <div
-                  style={{
-                    position: 'fixed',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    zIndex: 9999,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '16px',
-                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                    padding: '24px',
-                    borderRadius: '8px',
-                  }}
-                >
-                  <div
-                    style={{
-                      animation: 'spin 1s linear infinite',
-                    }}
-                  >
-                    <Icon icon={mdiLoading} size={2} />
-                  </div>
-                  <div
-                    style={{ fontSize: '14px', fontWeight: 500, color: '#fff' }}
-                  >
-                    Checking server connection...
-                  </div>
-                  <style>
-                    {`
-                      @keyframes spin {
-                        from {
-                          transform: rotate(0deg);
-                        }
-                        to {
-                          transform: rotate(360deg);
-                        }
-                      }
-                    `}
-                  </style>
-                </div>
-              )}
               <button
                 type="button"
                 className="settings__close"

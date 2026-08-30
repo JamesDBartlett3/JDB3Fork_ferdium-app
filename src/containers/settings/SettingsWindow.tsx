@@ -18,8 +18,6 @@ class SettingsContainer extends Component<IProps> {
 
   el: HTMLDivElement;
 
-  previousPathname: string = '';
-
   constructor(props: IProps) {
     super(props);
 
@@ -39,26 +37,6 @@ class SettingsContainer extends Component<IProps> {
     // Sync services immediately when settings modal opens
     if (isRemoteAccount) {
       stores!.services.syncFromServer();
-    }
-
-    // Track current pathname to detect changes
-    this.previousPathname = stores!.router.location.pathname;
-  }
-
-  componentDidUpdate(): void {
-    const { stores } = this.props;
-    const currentPathname = stores!.router.location.pathname;
-    const isRemoteAccount =
-      stores && stores.settings.all.app.server !== LOCAL_SERVER;
-
-    // Sync whenever pathname changes and we're in settings
-    if (
-      isRemoteAccount &&
-      currentPathname !== this.previousPathname &&
-      currentPathname.startsWith('/settings')
-    ) {
-      stores!.services.syncFromServer();
-      this.previousPathname = currentPathname;
     }
   }
 
@@ -82,7 +60,6 @@ class SettingsContainer extends Component<IProps> {
         <Layout
           navigation={navigation}
           closeSettings={closeSettings}
-          serverHealthCheckLoading={stores!.requests.serverHealthCheckLoading}
           serverConnection={stores!.requests.serverConnection}
           hasPendingSyncConflict={stores!.services.hasPendingSyncConflict}
         >

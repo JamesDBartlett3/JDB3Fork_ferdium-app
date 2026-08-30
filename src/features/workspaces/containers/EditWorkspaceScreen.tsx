@@ -46,9 +46,7 @@ class EditWorkspaceScreen extends Component<StoresProps> {
           onSave={this.onSave}
           updateWorkspaceRequest={updateWorkspaceRequest}
           deleteWorkspaceRequest={deleteWorkspaceRequest}
-          isServerConnected={
-            isServerConnected && !isRemoteAccount ? true : isServerConnected
-          }
+          isServerConnected={!isRemoteAccount || isServerConnected}
           hasPendingSyncConflict={hasPendingSyncConflict}
         />
       </ErrorBoundary>

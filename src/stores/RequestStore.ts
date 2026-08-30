@@ -41,10 +41,6 @@ export default class RequestStore extends TypedStore {
   // Always starts as 'connecting' on app startup.
   @observable serverConnection: ServerConnectionState = 'connecting';
 
-  // Separate flag for health check in progress (UI spinner overlay).
-  // Used when user opens settings modal to perform a fresh health check.
-  @observable serverHealthCheckLoading: boolean = false;
-
   @observable localServerPort = LOCAL_PORT;
 
   @observable localServerToken: string | undefined;
@@ -57,8 +53,6 @@ export default class RequestStore extends TypedStore {
   _backoffTimer: ReturnType<typeof setTimeout> | null = null;
 
   _connectionCheckId: number = 0;
-
-  _activeHealthCheckId: number | null = null;
 
   constructor(stores: Stores, api: ApiInterface, actions: Actions) {
     super(stores, api, actions);
@@ -163,65 +157,6 @@ export default class RequestStore extends TypedStore {
   }
 
   /**
-   * On-demand health check for UI purposes (e.g., when opening settings modal).
-   * Updates serverConnection state to reflect current server availability.
-   * Sets serverHealthCheckLoading while checking to display spinner overlay.
-   *
-   * - For LOCAL_SERVER accounts, immediately sets 'connected'
-   * - For remote accounts, sets 'connecting' then performs a health check
-   * - On check success, sets 'connected'
-   * - On check failure, sets 'disconnected'
-   */
-  @action async checkServerHealth(): Promise<void> {
-    this._connectionCheckId += 1;
-    const checkId = this._connectionCheckId;
-    this._activeHealthCheckId = checkId;
-
-    // Local-only accounts are always "connected" (no server needed)
-    if (this.stores.settings.all.app.server === LOCAL_SERVER) {
-      this._clearScheduledRetry();
-      this._activeHealthCheckId = null;
-      runInAction(() => {
-        this.serverConnection = 'connected';
-        this.serverHealthCheckLoading = false;
-      });
-      return;
-    }
-
-    // Remote account — perform live health check with UI state updates
-    runInAction(() => {
-      this.serverHealthCheckLoading = true;
-      this.serverConnection = 'connecting';
-    });
-
-    try {
-      debug('Health check for UI: checking server availability');
-      await this.api.app.health();
-      debug('Server health check passed — connection is live');
-      if (checkId !== this._connectionCheckId) {
-        this._finishHealthCheck(checkId);
-        return;
-      }
-      this._activeHealthCheckId = null;
-      runInAction(() => {
-        this.serverConnection = 'connected';
-        this.serverHealthCheckLoading = false;
-      });
-    } catch (error) {
-      debug('Server health check failed', error);
-      if (checkId !== this._connectionCheckId) {
-        this._finishHealthCheck(checkId);
-        return;
-      }
-      this._activeHealthCheckId = null;
-      runInAction(() => {
-        this.serverConnection = 'disconnected';
-        this.serverHealthCheckLoading = false;
-      });
-    }
-  }
-
-  /**
    * Verify that the server is live and ready to accept writes. This is a
    * lightweight health check (not a full sync). Called before every write
    * operation that needs server confirmation.
@@ -279,15 +214,6 @@ export default class RequestStore extends TypedStore {
   }
 
   // Reactions
-  _finishHealthCheck(checkId: number): void {
-    if (this._activeHealthCheckId === checkId) {
-      this._activeHealthCheckId = null;
-      runInAction(() => {
-        this.serverHealthCheckLoading = false;
-      });
-    }
-  }
-
   _clearScheduledRetry(): void {
     if (this._backoffTimer) {
       clearTimeout(this._backoffTimer);
