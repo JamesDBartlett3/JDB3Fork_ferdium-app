@@ -244,6 +244,13 @@ body.win32:not(.isFullScreen) .app .app__content {
   animation: isDownloadingDoneFade 0.2s linear infinite;
 }
 
+.sidebar__button--disabled {
+  cursor: not-allowed;
+  filter: grayscale(100%);
+  opacity: 0.3;
+  // Keep pointer-events default so the hover tooltip can still fire.
+}
+
 .grid .grid__row {
   display: flex;
   flex-direction: row;

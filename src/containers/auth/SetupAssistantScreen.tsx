@@ -93,12 +93,14 @@ class SetupAssistantScreen extends Component<IProps, IState> {
   }
 
   render(): ReactElement {
+    const { requests } = this.props.stores;
     return (
       <SetupAssistant
         onSubmit={config => this.setupServices(config)}
         services={this.services}
         // embed={false} // TODO: [TS DEBT][PROP NOT USED IN COMPONENT] check legacy services type
         isSettingUpServices={this.state.isSettingUpServices}
+        isServerReachable={!requests.isWriteLocked}
       />
     );
   }

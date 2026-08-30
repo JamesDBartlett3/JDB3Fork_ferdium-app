@@ -1,13 +1,16 @@
-import { mdiClose } from '@mdi/js';
-import { observer } from 'mobx-react';
-import { Component, type PropsWithChildren, type ReactElement } from 'react';
+import { mdiClose, mdiFlash } from '@mdi/js';
+import { inject, observer } from 'mobx-react';
+import { Component, type ReactElement, type ReactNode } from 'react';
 import {
   type WrappedComponentProps,
   defineMessages,
   injectIntl,
 } from 'react-intl';
 import { Outlet } from 'react-router-dom';
+import type { StoresProps } from '../../@types/ferdium-components.types';
 import { isEscapeKeyPress } from '../../jsUtils';
+import type { ServerConnectionState } from '../../stores/RequestStore';
+import InfoBar from '../ui/InfoBar';
 import Appear from '../ui/effects/Appear';
 import Icon from '../ui/icon';
 import ErrorBoundary from '../util/ErrorBoundary';
@@ -17,15 +20,27 @@ const messages = defineMessages({
     id: 'settings.app.closeSettings',
     defaultMessage: 'Close settings',
   },
+  servicesSyncConflict: {
+    id: 'infobar.servicesSyncConflict',
+    defaultMessage:
+      'Service changes differ between local cache and server. Sync with the server to continue making changes.',
+  },
+  buttonUseServerVersion: {
+    id: 'infobar.buttonUseServerVersion',
+    defaultMessage: 'Use server version',
+  },
 });
 
-interface IProps extends WrappedComponentProps {
+interface IProps extends WrappedComponentProps, Partial<StoresProps> {
   navigation: ReactElement;
   closeSettings: () => void;
+  serverConnection?: ServerConnectionState;
+  hasPendingSyncConflict?: boolean;
+  // eslint-disable-next-line react/no-unused-prop-types
+  children?: ReactNode;
 }
 
-@observer
-class SettingsLayout extends Component<PropsWithChildren<IProps>> {
+class SettingsLayout extends Component<IProps> {
   constructor(props: IProps) {
     super(props);
 
@@ -47,7 +62,14 @@ class SettingsLayout extends Component<PropsWithChildren<IProps>> {
   }
 
   render(): ReactElement {
-    const { navigation, closeSettings, intl } = this.props;
+    const {
+      navigation,
+      closeSettings,
+      intl,
+      serverConnection = 'connected',
+      hasPendingSyncConflict = false,
+      stores,
+    } = this.props;
 
     return (
       <Appear transitionName="fadeIn-fast">
@@ -61,7 +83,28 @@ class SettingsLayout extends Component<PropsWithChildren<IProps>> {
             />
             <div className="settings franz-form">
               {navigation}
-              <Outlet />
+              <div className="settings__content">
+                {hasPendingSyncConflict && (
+                  <InfoBar
+                    type="warning"
+                    position="top"
+                    ctaLabel={intl.formatMessage(
+                      messages.buttonUseServerVersion,
+                    )}
+                    sticky
+                    onClick={() => stores?.services.applyPendingServerSync()}
+                  >
+                    <Icon icon={mdiFlash} />
+                    {intl.formatMessage(messages.servicesSyncConflict)}
+                  </InfoBar>
+                )}
+                <Outlet
+                  context={{
+                    serverConnection,
+                    hasPendingSyncConflict,
+                  }}
+                />
+              </div>
               <button
                 type="button"
                 className="settings__close"
@@ -78,4 +121,6 @@ class SettingsLayout extends Component<PropsWithChildren<IProps>> {
   }
 }
 
-export default injectIntl(SettingsLayout);
+export default injectIntl<'intl', IProps>(
+  inject('stores', 'actions')(observer(SettingsLayout)),
+);

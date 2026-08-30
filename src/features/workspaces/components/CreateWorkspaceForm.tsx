@@ -39,6 +39,8 @@ const styles = {
 interface IProps extends WithStylesProps<typeof styles>, WrappedComponentProps {
   isSubmitting: boolean;
   onSubmit: (...args: any[]) => void;
+  isServerConnected?: boolean;
+  hasPendingSyncConflict?: boolean;
 }
 
 @observer
@@ -71,8 +73,15 @@ class CreateWorkspaceForm extends Component<IProps> {
   }
 
   render(): ReactElement {
-    const { classes, isSubmitting, intl } = this.props;
+    const {
+      classes,
+      isSubmitting,
+      intl,
+      isServerConnected = true,
+      hasPendingSyncConflict = false,
+    } = this.props;
     const { form } = this;
+    const isDisabled = !isServerConnected || hasPendingSyncConflict;
 
     return (
       <div className={classes.form}>
@@ -80,10 +89,11 @@ class CreateWorkspaceForm extends Component<IProps> {
           {...form.$('name').bind()}
           className={classes.input}
           showLabel={false}
+          disabled={isDisabled}
           // @ts-expect-error Expected 1 arguments, but got 2.
           // eslint-disable-next-line react/jsx-no-bind
           onEnterKey={this.submitForm.bind(this, form)}
-          focus={workspaceStore.isUserAllowedToUseFeature}
+          focus={workspaceStore.isUserAllowedToUseFeature && !isDisabled}
         />
         <Button
           className={`${classes.submitButton} franz-form__button`}
@@ -94,6 +104,7 @@ class CreateWorkspaceForm extends Component<IProps> {
           onClick={this.submitForm.bind(this, form)}
           busy={isSubmitting}
           buttonType={isSubmitting ? 'secondary' : 'primary'}
+          disabled={isDisabled || isSubmitting}
         />
       </div>
     );

@@ -7,6 +7,7 @@ import {
   injectIntl,
 } from 'react-intl';
 import withStyles, { type WithStylesProps } from 'react-jss';
+import { Tooltip as ReactTooltip } from 'react-tooltip';
 import { CDN_URL } from '../../config';
 import globalMessages from '../../i18n/globalMessages';
 import Infobox from '../ui/Infobox';
@@ -32,6 +33,11 @@ const messages = defineMessages({
   submitButtonLabel: {
     id: 'setupAssistant.submit.label',
     defaultMessage: "Let's go",
+  },
+  offlineTooltip: {
+    id: 'setupAssistant.offlineTooltip',
+    defaultMessage:
+      "Can't set up services while the Ferdium server is offline. You can skip this step and add services later.",
   },
   skipButtonLabel: {
     id: 'setupAssistant.skip.label',
@@ -140,6 +146,7 @@ interface IProps extends WithStylesProps<typeof styles>, WrappedComponentProps {
   isInviteSuccessful?: boolean;
   services: any; // TODO: [TS DEBT] check legacy services type
   isSettingUpServices: boolean;
+  isServerReachable: boolean;
 }
 
 interface IState {
@@ -190,6 +197,7 @@ class SetupAssistant extends Component<IProps, IState> {
       onSubmit,
       services,
       isSettingUpServices,
+      isServerReachable,
       intl,
     } = this.props;
     const {
@@ -317,11 +325,28 @@ class SetupAssistant extends Component<IProps, IState> {
         <Button
           type="button"
           className="auth__button"
-          // disabled={!atLeastOneEmailAddress}
           label={intl.formatMessage(messages.submitButtonLabel)}
           onClick={() => onSubmit(this.state.services)}
           busy={isSettingUpServices}
-          disabled={isSettingUpServices || addedServices.length === 0}
+          disabled={
+            isSettingUpServices ||
+            addedServices.length === 0 ||
+            !isServerReachable
+          }
+          data-tooltip-id={
+            isServerReachable ? undefined : 'tooltip-setup-assistant-offline'
+          }
+          data-tooltip-content={
+            isServerReachable
+              ? undefined
+              : intl.formatMessage(messages.offlineTooltip)
+          }
+        />
+        <ReactTooltip
+          id="tooltip-setup-assistant-offline"
+          place="top"
+          variant="dark"
+          style={{ height: 'auto' }}
         />
         <Button
           type="button"

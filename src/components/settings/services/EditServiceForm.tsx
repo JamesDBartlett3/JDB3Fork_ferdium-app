@@ -9,6 +9,7 @@ import {
   injectIntl,
 } from 'react-intl';
 import { Link } from 'react-router-dom';
+import { Tooltip as ReactTooltip } from 'react-tooltip';
 import { isMac } from '../../../environment';
 import { normalizedUrl } from '../../../helpers/url-helpers';
 import globalMessages from '../../../i18n/globalMessages';
@@ -30,6 +31,21 @@ const messages = defineMessages({
   saveService: {
     id: 'settings.service.form.saveButton',
     defaultMessage: 'Save service',
+  },
+  offlineCreateTooltip: {
+    id: 'settings.service.form.offlineCreateTooltip',
+    defaultMessage:
+      "Can't create new services while the Ferdium server is offline. Please try again when the connection is restored.",
+  },
+  offlineSaveTooltip: {
+    id: 'settings.service.form.offlineSaveTooltip',
+    defaultMessage:
+      "Can't save services while the Ferdium server is offline. Please try again when the connection is restored.",
+  },
+  offlineDeleteTooltip: {
+    id: 'settings.service.form.offlineDeleteTooltip',
+    defaultMessage:
+      "Can't delete services while the Ferdium server is offline. Please try again when the connection is restored.",
   },
   deleteService: {
     id: 'settings.service.form.deleteButton',
@@ -174,6 +190,8 @@ interface IProps extends WrappedComponentProps {
   isSaving: boolean;
   isDeleting: boolean;
   isProxyFeatureEnabled: boolean;
+  isServerReachable: boolean;
+  hasPendingSyncConflict?: boolean;
 }
 
 interface IState {
@@ -240,9 +258,13 @@ class EditServiceForm extends Component<IProps, IState> {
       onClearCache,
       openRecipeFile,
       isProxyFeatureEnabled,
+      isServerReachable,
+      hasPendingSyncConflict = false,
       intl,
     } = this.props;
     const { isValidatingCustomUrl } = this.state;
+
+    const isFormDisabled = hasPendingSyncConflict;
 
     const deleteButton = isDeleting ? (
       <Button
@@ -253,28 +275,49 @@ class EditServiceForm extends Component<IProps, IState> {
         disabled
       />
     ) : (
-      <Button
-        buttonType="danger"
-        label={intl.formatMessage(messages.deleteService)}
-        className="settings__delete-button"
-        onClick={() => {
-          // @ts-expect-error Fix me
-          const selection = dialog.showMessageBoxSync(app.mainWindow, {
-            type: 'question',
-            message: intl.formatMessage(messages.deleteService),
-            detail: intl.formatMessage(messages.confirmDeleteService, {
-              serviceName: service?.name || recipe.name,
-            }),
-            buttons: [
-              intl.formatMessage(globalMessages.yes),
-              intl.formatMessage(globalMessages.no),
-            ],
-          });
-          if (selection === 0) {
-            onDelete();
+      <>
+        <Button
+          buttonType="danger"
+          label={intl.formatMessage(messages.deleteService)}
+          className="settings__delete-button"
+          disabled={!isServerReachable || isFormDisabled}
+          data-tooltip-id={
+            !isServerReachable || isFormDisabled
+              ? 'tooltip-delete-service-offline'
+              : undefined
           }
-        }}
-      />
+          data-tooltip-content={
+            isFormDisabled
+              ? intl.formatMessage(messages.offlineDeleteTooltip)
+              : isServerReachable
+                ? undefined
+                : intl.formatMessage(messages.offlineDeleteTooltip)
+          }
+          onClick={() => {
+            // @ts-expect-error Fix me
+            const selection = dialog.showMessageBoxSync(app.mainWindow, {
+              type: 'question',
+              message: intl.formatMessage(messages.deleteService),
+              detail: intl.formatMessage(messages.confirmDeleteService, {
+                serviceName: service?.name || recipe.name,
+              }),
+              buttons: [
+                intl.formatMessage(globalMessages.yes),
+                intl.formatMessage(globalMessages.no),
+              ],
+            });
+            if (selection === 0) {
+              onDelete();
+            }
+          }}
+        />
+        <ReactTooltip
+          id="tooltip-delete-service-offline"
+          place="top"
+          variant="dark"
+          style={{ height: 'auto' }}
+        />
+      </>
     );
 
     const clearCacheButton = (
@@ -324,8 +367,18 @@ class EditServiceForm extends Component<IProps, IState> {
         </div>
         <div className="settings__body">
           <form onSubmit={e => this.submit(e)} id="form">
-            <div className="service-name">
-              <Input {...form.$('name').bind()} focus />
+            <div
+              className="service-name"
+              style={{
+                opacity: isFormDisabled ? 0.6 : 1,
+                pointerEvents: isFormDisabled ? 'none' : 'auto',
+              }}
+            >
+              <Input
+                {...form.$('name').bind()}
+                focus
+                disabled={isFormDisabled}
+              />
             </div>
             {(recipe.hasTeamId || recipe.hasCustomUrl) && (
               <Tabs active={activeTabIndex}>
@@ -342,12 +395,16 @@ class EditServiceForm extends Component<IProps, IState> {
                       {...form.$('team').bind()}
                       prefix={recipe.urlInputPrefix}
                       suffix={recipe.urlInputSuffix}
+                      disabled={isFormDisabled}
                     />
                   </TabItem>
                 )}
                 {recipe.hasCustomUrl && (
                   <TabItem title={intl.formatMessage(messages.tabOnPremise)}>
-                    <Input {...form.$('customUrl').bind()} />
+                    <Input
+                      {...form.$('customUrl').bind()}
+                      disabled={isFormDisabled}
+                    />
                     {form.error === 'url-validation-error' && (
                       <p className="franz-form__error">
                         {intl.formatMessage(messages.customUrlValidationError, {
@@ -371,26 +428,45 @@ class EditServiceForm extends Component<IProps, IState> {
                 {recipe.message}
               </p>
             )}
-            <div className="service-flex-grid">
+            <div
+              className="service-flex-grid"
+              style={{
+                opacity: isFormDisabled ? 0.6 : 1,
+                pointerEvents: isFormDisabled ? 'none' : 'auto',
+              }}
+            >
               <div className="settings__options">
                 <div className="settings__settings-group">
                   <H3>{intl.formatMessage(messages.headlineNotifications)}</H3>
-                  <Toggle {...form.$('isNotificationEnabled').bind()} />
-                  <Toggle {...form.$('isMuted').bind()} />
+                  <Toggle
+                    {...form.$('isNotificationEnabled').bind()}
+                    disabled={isFormDisabled}
+                  />
+                  <Toggle
+                    {...form.$('isMuted').bind()}
+                    disabled={isFormDisabled}
+                  />
                   <p className="settings__help indented__help">
                     {intl.formatMessage(messages.isMutedInfo)}
                   </p>
-                  <Toggle {...form.$('isMediaBadgeEnabled').bind()} />
+                  <Toggle
+                    {...form.$('isMediaBadgeEnabled').bind()}
+                    disabled={isFormDisabled}
+                  />
                 </div>
 
                 <div className="settings__settings-group">
                   <H3>{intl.formatMessage(messages.headlineBadges)}</H3>
-                  <Toggle {...form.$('isBadgeEnabled').bind()} />
+                  <Toggle
+                    {...form.$('isBadgeEnabled').bind()}
+                    disabled={isFormDisabled}
+                  />
                   {recipe.hasIndirectMessages &&
                     form.$('isBadgeEnabled').value && (
                       <>
                         <Toggle
                           {...form.$('isIndirectMessageBadgeEnabled').bind()}
+                          disabled={isFormDisabled}
                         />
                         <p className="settings__help indented__help">
                           {intl.formatMessage(messages.indirectMessageInfo)}
@@ -400,19 +476,32 @@ class EditServiceForm extends Component<IProps, IState> {
                   {recipe.allowFavoritesDelineationInUnreadCount && (
                     <Toggle
                       {...form.$('onlyShowFavoritesInUnreadCount').bind()}
+                      disabled={isFormDisabled}
                     />
                   )}
                 </div>
 
                 <div className="settings__settings-group">
                   <H3>{intl.formatMessage(messages.headlineGeneral)}</H3>
-                  <Toggle {...form.$('isEnabled').bind()} />
-                  <Toggle {...form.$('isHibernationEnabled').bind()} />
+                  <Toggle
+                    {...form.$('isEnabled').bind()}
+                    disabled={isFormDisabled}
+                  />
+                  <Toggle
+                    {...form.$('isHibernationEnabled').bind()}
+                    disabled={isFormDisabled}
+                  />
                   <p className="settings__help indented__help">
                     {intl.formatMessage(messages.isHibernationEnabledInfo)}
                   </p>
-                  <Toggle {...form.$('isWakeUpEnabled').bind()} />
-                  <Toggle {...form.$('trapLinkClicks').bind()} />
+                  <Toggle
+                    {...form.$('isWakeUpEnabled').bind()}
+                    disabled={isFormDisabled}
+                  />
+                  <Toggle
+                    {...form.$('trapLinkClicks').bind()}
+                    disabled={isFormDisabled}
+                  />
                   {/* TODO: Need to figure out how to effect this change without a reload of the recipe */}
                   <p className="settings__help indented__help">
                     {intl.formatMessage(messages.serviceReloadRequired)}
@@ -421,8 +510,14 @@ class EditServiceForm extends Component<IProps, IState> {
 
                 <div className="settings__settings-group">
                   <H3>{intl.formatMessage(messages.headlineAppearance)}</H3>
-                  <Toggle {...form.$('useFavicon').bind()} />
-                  <Toggle {...form.$('isDarkModeEnabled').bind()} />
+                  <Toggle
+                    {...form.$('useFavicon').bind()}
+                    disabled={isFormDisabled}
+                  />
+                  <Toggle
+                    {...form.$('isDarkModeEnabled').bind()}
+                    disabled={isFormDisabled}
+                  />
                   {form.$('isDarkModeEnabled').value && (
                     <>
                       <H3>
@@ -430,12 +525,24 @@ class EditServiceForm extends Component<IProps, IState> {
                           messages.headlineDarkReaderSettings,
                         )}
                       </H3>
-                      <Slider field={form.$('darkReaderBrightness')} />
-                      <Slider field={form.$('darkReaderContrast')} />
-                      <Slider field={form.$('darkReaderSepia')} />
+                      <Slider
+                        field={form.$('darkReaderBrightness')}
+                        disabled={isFormDisabled}
+                      />
+                      <Slider
+                        field={form.$('darkReaderContrast')}
+                        disabled={isFormDisabled}
+                      />
+                      <Slider
+                        field={form.$('darkReaderSepia')}
+                        disabled={isFormDisabled}
+                      />
                     </>
                   )}
-                  <Toggle {...form.$('isProgressbarEnabled').bind()} />
+                  <Toggle
+                    {...form.$('isProgressbarEnabled').bind()}
+                    disabled={isFormDisabled}
+                  />
                 </div>
               </div>
               <div className="service-icon">
@@ -454,18 +561,33 @@ class EditServiceForm extends Component<IProps, IState> {
             </div>
 
             {!isMac && (
-              <div className="settings__settings-group">
+              <div
+                className="settings__settings-group"
+                style={{
+                  opacity: isFormDisabled ? 0.6 : 1,
+                  pointerEvents: isFormDisabled ? 'none' : 'auto',
+                }}
+              >
                 <Select field={form.$('spellcheckerLanguage')} />
               </div>
             )}
 
             {isProxyFeatureEnabled && (
-              <div className="settings__settings-group">
+              <div
+                className="settings__settings-group"
+                style={{
+                  opacity: isFormDisabled ? 0.6 : 1,
+                  pointerEvents: isFormDisabled ? 'none' : 'auto',
+                }}
+              >
                 <H3>
                   {intl.formatMessage(messages.headlineProxy)}
                   <span className="badge badge--success">beta</span>
                 </H3>
-                <Toggle {...form.$('proxy.isEnabled').bind()} />
+                <Toggle
+                  {...form.$('proxy.isEnabled').bind()}
+                  disabled={isFormDisabled}
+                />
                 {form.$('proxy.isEnabled').value && (
                   <>
                     <div className="grid">
@@ -473,16 +595,24 @@ class EditServiceForm extends Component<IProps, IState> {
                         <Input
                           {...form.$('proxy.host').bind()}
                           className="proxyHost"
+                          disabled={isFormDisabled}
                         />
-                        <Input {...form.$('proxy.port').bind()} />
+                        <Input
+                          {...form.$('proxy.port').bind()}
+                          disabled={isFormDisabled}
+                        />
                       </div>
                     </div>
                     <div className="grid">
                       <div className="grid__row">
-                        <Input {...form.$('proxy.user').bind()} />
+                        <Input
+                          {...form.$('proxy.user').bind()}
+                          disabled={isFormDisabled}
+                        />
                         <Input
                           {...form.$('proxy.password').bind()}
                           showPasswordToggle
+                          disabled={isFormDisabled}
                         />
                       </div>
                     </div>
@@ -499,8 +629,17 @@ class EditServiceForm extends Component<IProps, IState> {
               </div>
             )}
 
-            <div className="user-agent">
-              <Input {...form.$('userAgentPref').bind()} />
+            <div
+              className="user-agent"
+              style={{
+                opacity: isFormDisabled ? 0.6 : 1,
+                pointerEvents: isFormDisabled ? 'none' : 'auto',
+              }}
+            >
+              <Input
+                {...form.$('userAgentPref').bind()}
+                disabled={isFormDisabled}
+              />
               <p className="settings__help">
                 {intl.formatMessage(globalMessages.userAgentHelp)}
               </p>
@@ -509,24 +648,33 @@ class EditServiceForm extends Component<IProps, IState> {
 
           {action === 'edit' && (
             <>
-              <div className="settings__open-recipe-file-container">
+              <div
+                className="settings__open-recipe-file-container"
+                style={{
+                  opacity: isFormDisabled ? 0.6 : 1,
+                  pointerEvents: isFormDisabled ? 'none' : 'auto',
+                }}
+              >
                 <Button
                   buttonType="secondary"
                   label={intl.formatMessage(messages.openDarkmodeCss)}
                   className="settings__open-recipe-file-button"
                   onClick={() => openRecipeFile('darkmode.css')}
+                  disabled={isFormDisabled}
                 />
                 <Button
                   buttonType="secondary"
                   label={intl.formatMessage(messages.openUserCss)}
                   className="settings__open-recipe-file-button"
                   onClick={() => openRecipeFile('user.css')}
+                  disabled={isFormDisabled}
                 />
                 <Button
                   buttonType="secondary"
                   label={intl.formatMessage(messages.openUserJs)}
                   className="settings__open-recipe-file-button"
                   onClick={() => openRecipeFile('user.js')}
+                  disabled={isFormDisabled}
                 />
               </div>
               <p style={{ marginTop: 10, marginBottom: 10 }}>
@@ -555,14 +703,32 @@ class EditServiceForm extends Component<IProps, IState> {
               disabled
             />
           ) : (
-            <Button
-              type="submit"
-              label={intl.formatMessage(messages.saveService)}
-              htmlForm="form"
-              disabled={
-                action !== 'edit' && form.isPristine && requiresUserInput
-              }
-            />
+            <>
+              <Button
+                type="submit"
+                label={intl.formatMessage(messages.saveService)}
+                htmlForm="form"
+                disabled={
+                  isFormDisabled ||
+                  !isServerReachable ||
+                  (action !== 'edit' && form.isPristine && requiresUserInput)
+                }
+                data-tooltip-id={
+                  isServerReachable ? undefined : 'tooltip-save-service-offline'
+                }
+                data-tooltip-content={
+                  isServerReachable
+                    ? undefined
+                    : intl.formatMessage(messages.offlineSaveTooltip)
+                }
+              />
+              <ReactTooltip
+                id="tooltip-save-service-offline"
+                place="top"
+                variant="dark"
+                style={{ height: 'auto' }}
+              />
+            </>
           )}
         </div>
       </div>

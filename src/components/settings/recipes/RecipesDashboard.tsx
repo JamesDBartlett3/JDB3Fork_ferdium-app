@@ -75,6 +75,11 @@ const messages = defineMessages({
     id: 'settings.recipes.customService.headline.devRecipes',
     defaultMessage: 'Your Development Service Recipes',
   },
+  offlineCreateTooltip: {
+    id: 'settings.recipes.offlineCreateTooltip',
+    defaultMessage:
+      "Can't create new services while the Ferdium server is offline. Please try again when the connection is restored.",
+  },
 });
 
 const styles = {
@@ -120,6 +125,8 @@ interface IProps extends WithStylesProps<typeof styles>, WrappedComponentProps {
   recipeDirectory: string;
   openRecipeDirectory: () => void;
   openDevDocs: () => void;
+  isServerReachable: boolean;
+  hasPendingSyncConflict?: boolean;
 }
 
 interface IState {
@@ -148,12 +155,21 @@ class RecipesDashboard extends Component<IProps, IState> {
       recipeDirectory,
       openRecipeDirectory,
       openDevDocs,
+      isServerReachable,
+      hasPendingSyncConflict = false,
       classes,
       intl,
     } = this.props;
 
     const communityRecipes = recipes.filter(r => !r.isDevRecipe);
     const devRecipes = recipes.filter(r => r.isDevRecipe);
+
+    const recipeDisabled = !isServerReachable || hasPendingSyncConflict;
+    const recipeDisabledTooltip = intl.formatMessage(
+      hasPendingSyncConflict
+        ? messages.offlineCreateTooltip
+        : messages.offlineCreateTooltip,
+    );
 
     return (
       <div className="settings__main">
@@ -172,14 +188,43 @@ class RecipesDashboard extends Component<IProps, IState> {
               </Infobox>
             </Appear>
           )}
-          <SearchInput
-            placeholder={intl.formatMessage(messages.searchService)}
-            onChange={e => searchRecipes(e)}
-            onReset={() => resetSearch()}
-            autoFocus
-            throttle
-          />
-          <div className="recipes__navigation">
+          {recipeDisabled && (
+            <Infobox type="warning" icon="alert-circle-outline">
+              {intl.formatMessage(messages.offlineCreateTooltip)}
+            </Infobox>
+          )}
+          {recipeDisabled ? (
+            <div
+              style={{
+                opacity: 0.6,
+                pointerEvents: 'none',
+              }}
+            >
+              <SearchInput
+                placeholder={intl.formatMessage(messages.searchService)}
+                onChange={e => searchRecipes(e)}
+                onReset={() => resetSearch()}
+                autoFocus
+                throttle
+              />
+            </div>
+          ) : (
+            <SearchInput
+              placeholder={intl.formatMessage(messages.searchService)}
+              onChange={e => searchRecipes(e)}
+              onReset={() => resetSearch()}
+              autoFocus
+              throttle
+            />
+          )}
+          <div
+            className="recipes__navigation"
+            style={{
+              opacity: recipeDisabled ? 0.6 : 1,
+              pointerEvents: recipeDisabled ? 'none' : 'auto',
+              cursor: recipeDisabled ? 'not-allowed' : 'auto',
+            }}
+          >
             <NavLink
               to="/settings/recipes"
               className={() =>
@@ -223,7 +268,12 @@ class RecipesDashboard extends Component<IProps, IState> {
           {isLoading ? (
             <Loader />
           ) : (
-            <>
+            <div
+              style={{
+                opacity: recipeDisabled ? 0.6 : 1,
+                pointerEvents: recipeDisabled ? 'none' : 'auto',
+              }}
+            >
               {recipeFilter === 'dev' && (
                 <>
                   <H2>{intl.formatMessage(messages.headlineCustomRecipes)}</H2>
@@ -233,17 +283,20 @@ class RecipesDashboard extends Component<IProps, IState> {
                       value={recipeDirectory}
                       className={classes.path}
                       showLabel={false}
+                      disabled={recipeDisabled}
                     />
                     <div className={classes.actionContainer}>
                       <Button
                         onClick={openRecipeDirectory}
                         buttonType="secondary"
                         label={intl.formatMessage(messages.openFolder)}
+                        disabled={recipeDisabled}
                       />
                       <Button
                         onClick={openDevDocs}
                         buttonType="secondary"
                         label={intl.formatMessage(messages.openDevDocs)}
+                        disabled={recipeDisabled}
                       />
                     </div>
                   </div>
@@ -257,6 +310,8 @@ class RecipesDashboard extends Component<IProps, IState> {
                   <RecipeItem
                     key={recipe.id}
                     recipe={recipe}
+                    disabled={recipeDisabled}
+                    disabledTooltip={recipeDisabledTooltip}
                     onClick={() =>
                       showAddServiceInterface({ recipeId: recipe.id })
                     }
@@ -271,6 +326,8 @@ class RecipesDashboard extends Component<IProps, IState> {
                       <RecipeItem
                         key={customWebsiteRecipe.id}
                         recipe={customWebsiteRecipe}
+                        disabled={recipeDisabled}
+                        disabledTooltip={recipeDisabledTooltip}
                         onClick={() =>
                           showAddServiceInterface({
                             recipeId: customWebsiteRecipe.id,
@@ -291,6 +348,8 @@ class RecipesDashboard extends Component<IProps, IState> {
                       <RecipeItem
                         key={recipe.id}
                         recipe={recipe}
+                        disabled={recipeDisabled}
+                        disabledTooltip={recipeDisabledTooltip}
                         onClick={() =>
                           showAddServiceInterface({ recipeId: recipe.id })
                         }
@@ -299,7 +358,7 @@ class RecipesDashboard extends Component<IProps, IState> {
                   </div>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       </div>

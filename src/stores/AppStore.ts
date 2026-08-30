@@ -221,10 +221,24 @@ export default class AppStore extends TypedStore {
     this._systemDND();
     setInterval(() => this._systemDND(), ms('5s'));
 
-    this.fetchDataInterval = setInterval(() => {
-      this.stores.user.getUserInfoRequest.invalidate({
-        immediately: true,
-      });
+    if (this.fetchDataInterval !== null) {
+      clearInterval(this.fetchDataInterval);
+    }
+    this.fetchDataInterval = setInterval(async () => {
+      try {
+        await this.stores.user.getUserInfoRequest.invalidate({
+          immediately: true,
+        }).promise;
+        // Successful poll — the server is reachable. Route through the
+        // connection state machine so it goes connecting -> connected and
+        // triggers a proper services sync (rather than a direct write that
+        // skips the intermediate state and conflict detection).
+        this.stores.requests._triggerServerSync();
+      } catch {
+        // Poll failed — route through the state machine so the backoff
+        // reaction runs and the banner rules are respected.
+        this.stores.requests._checkServerConnection();
+      }
       this.stores.features.featuresRequest.invalidate({
         immediately: true,
       });
