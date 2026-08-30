@@ -71,7 +71,12 @@ class InfoBar extends Component<IProps> {
         >
           {children}
           {ctaLabel && (
-            <button type="button" className="info-bar__cta" onClick={onClick}>
+            <button
+              type="button"
+              className="info-bar__cta"
+              onClick={onClick}
+              disabled={ctaLoading}
+            >
               <div
                 className="contentWrapper"
                 style={{ display: 'flex', gap: '8px' }}

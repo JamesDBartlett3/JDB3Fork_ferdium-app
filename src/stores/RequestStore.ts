@@ -45,6 +45,11 @@ export default class RequestStore extends TypedStore {
 
   @observable localServerToken: string | undefined;
 
+  // Set when the embedded local API fails to start or becomes unreachable.
+  // Kept separate from the remote-account write lock: a local server failure
+  // is a local operational error, not a remote synchronization problem.
+  @observable localServerError: string | null = null;
+
   // Backoff state (only used while disconnected).
   _backoffIndex: number = 0;
 
@@ -77,10 +82,52 @@ export default class RequestStore extends TypedStore {
 
     ipcRenderer.on('localServerPort', (_, data) => {
       this.setData(data);
+      // The embedded server reported its port — clear any prior failure.
+      runInAction(() => {
+        this.localServerError = null;
+      });
+    });
+
+    ipcRenderer.on('localServerError', (_, data) => {
+      runInAction(() => {
+        this.localServerError =
+          data?.message ?? 'The embedded local server failed to start';
+      });
     });
   }
 
+  // True when the embedded local API failed to start while a local-only
+  // account is active. Reported separately from remote sync state.
+  @computed get hasLocalServerError(): boolean {
+    return this.isLocalOnlyAccount && this.localServerError !== null;
+  }
+
+  // Ask the main process to retry starting the embedded local server.
+  @action _retryLocalServer(): void {
+    this.localServerError = null;
+    ipcRenderer.send('startLocalServer');
+  }
+
+  // True when the active account is backed by Ferdium's embedded local API
+  // (LOCAL_SERVER). Local-only accounts are exempt from remote connection
+  // state and remote health checks.
+  @computed get isLocalOnlyAccount(): boolean {
+    return this.stores.settings.all.app.server === LOCAL_SERVER;
+  }
+
+  /**
+   * Single shared write-lock rule for all synchronized changes.
+   *
+   * - Local-only accounts: never locked by remote connection state; the
+   *   embedded local API is their source of truth and is always writable
+   *   once running.
+   * - Remote accounts: locked while connecting, disconnected, or waiting for
+   *   a synchronization conflict to be resolved.
+   */
   @computed get isWriteLocked(): boolean {
+    if (this.isLocalOnlyAccount) {
+      return false;
+    }
     return (
       this.serverConnection !== 'connected' ||
       this.stores.services.hasPendingSyncConflict
@@ -171,12 +218,24 @@ export default class RequestStore extends TypedStore {
    * reachable; it doesn't update full connection state.
    */
   async _verifyServerWritable(): Promise<boolean> {
-    // Local-only accounts don't need server verification
-    if (this.stores.settings.all.app.server === LOCAL_SERVER) {
+    // Local-only accounts don't need server verification: they read and
+    // write through the embedded local API, independent of remote connection
+    // state, remote health checks, and remote retry backoff.
+    if (this.isLocalOnlyAccount) {
       return true;
     }
 
-    // Remote account — perform live health check
+    // A pending synchronization conflict blocks remote writes immediately,
+    // even when a health check would succeed. Accepting the server copy (or
+    // transitioning accounts) is the only way to resume synchronized writes.
+    if (this.stores.services.hasPendingSyncConflict) {
+      debug('Write blocked: a synchronization conflict is pending');
+      return false;
+    }
+
+    // Remote account — perform live health check. Note: a successful health
+    // check only proves the server is reachable, NOT that local and server
+    // data agree; full synchronization remains responsible for that decision.
     try {
       debug('Verifying server writability with health check');
       await this.api.app.health();

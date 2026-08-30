@@ -2,7 +2,6 @@ import { inject, observer } from 'mobx-react';
 import { Component } from 'react';
 import type { StoresProps } from '../../../@types/ferdium-components.types';
 import ErrorBoundary from '../../../components/util/ErrorBoundary';
-import { LOCAL_SERVER } from '../../../config';
 import {
   createWorkspaceRequest,
   deleteWorkspaceRequest,
@@ -20,9 +19,7 @@ interface IProps extends StoresProps {}
 class WorkspacesScreen extends Component<IProps> {
   render() {
     const { actions, stores } = this.props;
-    const isRemoteAccount = stores!.settings.all.app.server !== LOCAL_SERVER;
-    const isServerConnected = stores!.requests.serverConnection === 'connected';
-    const { hasPendingSyncConflict } = stores!.services;
+    const { isWriteLocked } = stores!.requests;
 
     return (
       <ErrorBoundary>
@@ -36,8 +33,7 @@ class WorkspacesScreen extends Component<IProps> {
           onWorkspaceClick={(workspace: Workspace) =>
             actions.workspaces.edit({ workspace })
           }
-          isServerConnected={!isRemoteAccount || isServerConnected}
-          hasPendingSyncConflict={hasPendingSyncConflict}
+          isWriteLocked={isWriteLocked}
         />
       </ErrorBoundary>
     );

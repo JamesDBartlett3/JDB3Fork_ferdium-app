@@ -44,6 +44,15 @@ const messages = defineMessages({
     id: 'settings.account.buttonSave',
     defaultMessage: 'Update profile',
   },
+  lockedOffline: {
+    id: 'settings.account.lockedOffline',
+    defaultMessage: 'Settings are not available while the server is offline',
+  },
+  lockedSyncConflict: {
+    id: 'settings.account.lockedSyncConflict',
+    defaultMessage:
+      'Settings are not available while a server sync conflict is pending',
+  },
 });
 
 interface IProps extends WrappedComponentProps {
@@ -51,7 +60,7 @@ interface IProps extends WrappedComponentProps {
   form: Form;
   onSubmit: FormEventHandler<HTMLFormElement>;
   isSaving: boolean;
-  isServerConnected?: boolean;
+  isWriteLocked?: boolean;
   hasPendingSyncConflict?: boolean;
 }
 
@@ -75,11 +84,13 @@ class EditUserForm extends Component<IProps> {
       form,
       isSaving,
       intl,
-      isServerConnected = true,
+      isWriteLocked = false,
       hasPendingSyncConflict = false,
     } = this.props;
 
-    const isDisabled = !isServerConnected || hasPendingSyncConflict;
+    // isWriteLocked already covers both offline and pending-conflict states;
+    // hasPendingSyncConflict only selects the conflict-specific message.
+    const isDisabled = isWriteLocked;
 
     return (
       <div className="settings__main">
@@ -98,8 +109,8 @@ class EditUserForm extends Component<IProps> {
           {isDisabled && (
             <Infobox type="warning" icon="alert-circle-outline">
               {hasPendingSyncConflict
-                ? 'Settings are not available while a server sync conflict is pending'
-                : 'Settings are not available while server is offline'}
+                ? intl.formatMessage(messages.lockedSyncConflict)
+                : intl.formatMessage(messages.lockedOffline)}
             </Infobox>
           )}
           <form onSubmit={e => this.submit(e)} id="form">

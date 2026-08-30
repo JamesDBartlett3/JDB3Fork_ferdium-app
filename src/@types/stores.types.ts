@@ -180,17 +180,21 @@ interface RecipeStore extends TypedStore {
 interface RequestsStore extends TypedStore {
   localServerPort: number;
   localServerToken: string | undefined;
+  localServerError: string | null;
   syncServicesRequest: Request;
   servicesRequest: CachedRequest;
   userInfoRequest: CachedRequest;
   serverConnection: 'connected' | 'connecting' | 'disconnected';
   connectionDisplayState: 'connected' | 'connecting' | 'disconnected';
+  isLocalOnlyAccount: boolean;
+  hasLocalServerError: boolean;
   isWriteLocked: boolean;
   areRequiredRequestsLoading: boolean;
   _checkServerConnection: () => void;
   _triggerServerSync: () => void;
   _verifyServerWritable: () => Promise<boolean>;
   _flushPendingWritesThenSync: () => void;
+  _retryLocalServer: () => void;
 }
 
 interface RouterStore {
@@ -235,8 +239,8 @@ interface ServicesStore extends TypedStore {
   syncFromServer: () => Promise<void>;
   hasPendingSyncConflict: boolean;
   hasPendingWrites: boolean;
+  isApplyingPendingSync: boolean;
   applyPendingServerSync: () => Promise<void>;
-  dismissPendingServerSync: () => void;
   _syncFromServer: () => Promise<void>;
   _flushPendingWrites: () => Promise<void>;
 }

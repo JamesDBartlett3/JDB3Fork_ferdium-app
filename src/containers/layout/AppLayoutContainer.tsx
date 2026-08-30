@@ -189,7 +189,10 @@ class AppLayoutContainer extends Component<IProps> {
             retryRequiredRequests={retryRequiredRequests}
             areRequiredRequestsLoading={requests.areRequiredRequestsLoading}
             serverConnection={requests.connectionDisplayState}
+            hasLocalServerError={requests.hasLocalServerError}
+            retryLocalServer={() => requests._retryLocalServer()}
             hasPendingSyncConflict={services.hasPendingSyncConflict}
+            isApplyingPendingSync={services.isApplyingPendingSync}
             applyPendingServerSync={() => services.applyPendingServerSync()}
             updateVersion={app.updateVersion}
             isUpdateAvailable={

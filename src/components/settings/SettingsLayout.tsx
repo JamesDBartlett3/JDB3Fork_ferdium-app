@@ -23,7 +23,7 @@ const messages = defineMessages({
   servicesSyncConflict: {
     id: 'infobar.servicesSyncConflict',
     defaultMessage:
-      'Service changes differ between local cache and server. Sync with the server to continue making changes.',
+      'Service changes differ between this device and the server. Your local services remain visible, but synchronized changes are paused until you accept the server version.',
   },
   buttonUseServerVersion: {
     id: 'infobar.buttonUseServerVersion',
@@ -91,6 +91,7 @@ class SettingsLayout extends Component<IProps> {
                     ctaLabel={intl.formatMessage(
                       messages.buttonUseServerVersion,
                     )}
+                    ctaLoading={stores?.services.isApplyingPendingSync}
                     sticky
                     onClick={() => stores?.services.applyPendingServerSync()}
                   >

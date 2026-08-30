@@ -45,6 +45,12 @@ import {
 
 import { removeServicePartitionDirectory } from '../../helpers/service-helpers';
 
+import type {
+  PreparedServiceSyncEntry,
+  RawServiceResponse,
+  ServiceSyncResult,
+} from './service-sync';
+
 const debug = require('../../preload-safe-debug')('Ferdium:ServerApi');
 
 module.paths.unshift(getDevRecipeDirectory(), getRecipeDirectory());
@@ -225,14 +231,50 @@ export default class ServerApi {
     }
     const data = await request.json();
 
-    const resolvedServices = data;
+    // Pair each raw response with its constructed model so that callers can
+    // distinguish a missing property from an explicit `null` before the
+    // `Service` constructor defaults erase that difference.
+    const result = await this.prepareServiceSyncResult(data);
 
-    this.setCachedServicesRaw(resolvedServices);
+    // IMPORTANT: the raw server response is NOT written to the local cache
+    // here. Persisting must happen only after ServicesStore has accepted the
+    // response as non-conflicting (or the user chose "Use server version"),
+    // otherwise a restart could lose the local copy before conflict
+    // resolution. Callers persist via `cacheServicesFromModels()`.
+    debug(
+      'ServerApi::getServices resolves',
+      result.entries.map(e => e.model),
+    );
+    return result;
+  }
 
-    const services = await this._mapServiceModels(resolvedServices);
-    const filteredServices = services.filter(service => !!service);
-    debug('ServerApi::getServices resolves', filteredServices);
-    return filteredServices;
+  /**
+   * Build a `ServiceSyncResult` from a raw `GET /me/services` payload.
+   *
+   * Every raw entry must prepare into a model; otherwise the entire result
+   * is rejected. Treating a failed preparation as a server-side deletion
+   * would silently drop local services the server still knows about.
+   */
+  async prepareServiceSyncResult(
+    rawServices: any[],
+  ): Promise<ServiceSyncResult> {
+    const rawList: RawServiceResponse[] = Array.isArray(rawServices)
+      ? rawServices
+      : [];
+    const models = await this._mapServiceModels(rawList);
+
+    const entries: PreparedServiceSyncEntry[] = [];
+    for (const [index, raw] of rawList.entries()) {
+      const model = models[index];
+      if (!model) {
+        throw new Error(
+          `Unable to prepare service '${raw?.id}' (recipe '${raw?.recipeId}') from server response`,
+        );
+      }
+      entries.push({ raw, model });
+    }
+
+    return { entries };
   }
 
   async getCachedServices() {
@@ -291,9 +333,25 @@ export default class ServerApi {
   }
 
   cacheServicesFromModels(services: ServiceModel[]) {
-    this.setCachedServicesRaw(
-      services.map(service => this._extractServiceConfig(service)),
+    const rawConfigs = services.map(service =>
+      this._extractServiceConfig(service),
     );
+    try {
+      this.setCachedServicesRaw(rawConfigs);
+      return true;
+    } catch (error) {
+      // A cache write failure (quota exceeded, storage unavailable, …) must
+      // NOT be reported as a connection failure: the server request already
+      // succeeded and the accepted in-memory services remain usable. The user
+      // just loses offline recovery for this change, so surface a clear
+      // persistence warning instead.
+      console.warn(
+        'ServerApi: failed to persist services cache — offline recovery for this state will not be available',
+        error,
+      );
+      debug('ServerApi::cacheServicesFromModels persistence failed', error);
+      return false;
+    }
   }
 
   async createService(recipeId: string, data: ServiceCreatePayload) {

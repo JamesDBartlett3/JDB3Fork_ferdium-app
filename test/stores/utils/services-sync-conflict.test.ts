@@ -46,6 +46,15 @@ describe('hasServicesSyncConflict', () => {
     expect(hasServicesSyncConflict(local, remote)).toBe(false);
   });
 
+  it('returns true when a saved order property differs', () => {
+    // Response-array order is ignored, but each service's persisted `order`
+    // value is meaningful and a difference in it remains a conflict.
+    const local = [createService({ id: 'a', order: 0 })];
+    const remote = [createService({ id: 'a', order: 1 })];
+
+    expect(hasServicesSyncConflict(local, remote)).toBe(true);
+  });
+
   it('returns true when a service setting differs', () => {
     const local = [createService({ isMuted: false })];
     const remote = [createService({ isMuted: true })];

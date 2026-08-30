@@ -3,7 +3,6 @@ import { Component } from 'react';
 
 import type { StoresProps } from '../../../@types/ferdium-components.types';
 import ErrorBoundary from '../../../components/util/ErrorBoundary';
-import { LOCAL_SERVER } from '../../../config';
 import { deleteWorkspaceRequest, updateWorkspaceRequest } from '../api';
 import EditWorkspaceForm from '../components/EditWorkspaceForm';
 import { workspaceStore } from '../index';
@@ -33,9 +32,7 @@ class EditWorkspaceScreen extends Component<StoresProps> {
     const { stores } = this.props;
     if (!workspaceBeingEdited) return null;
 
-    const isRemoteAccount = stores.settings.all.app.server !== LOCAL_SERVER;
-    const isServerConnected = stores.requests.serverConnection === 'connected';
-    const { hasPendingSyncConflict } = stores.services;
+    const { isWriteLocked } = stores.requests;
 
     return (
       <ErrorBoundary>
@@ -46,8 +43,7 @@ class EditWorkspaceScreen extends Component<StoresProps> {
           onSave={this.onSave}
           updateWorkspaceRequest={updateWorkspaceRequest}
           deleteWorkspaceRequest={deleteWorkspaceRequest}
-          isServerConnected={!isRemoteAccount || isServerConnected}
-          hasPendingSyncConflict={hasPendingSyncConflict}
+          isWriteLocked={isWriteLocked}
         />
       </ErrorBoundary>
     );

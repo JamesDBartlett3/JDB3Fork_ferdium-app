@@ -174,8 +174,7 @@ class WorkspaceDrawer extends Component<IProps> {
 
     const isCompact = useCompactWorkspaceDrawer;
     const compactClass = isCompact ? 'compact' : '';
-    const isServerConnected = requests.serverConnection === 'connected';
-    const canAddWorkspace = isServerConnected;
+    const canAddWorkspace = !requests.isWriteLocked;
 
     const workspaceItems = (
       <>

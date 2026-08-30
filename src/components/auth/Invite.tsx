@@ -45,6 +45,15 @@ const messages = defineMessages({
     id: 'invite.successInfo',
     defaultMessage: 'Invitations sent successfully',
   },
+  lockedOffline: {
+    id: 'invite.lockedOffline',
+    defaultMessage: 'Invitations are not available while the server is offline',
+  },
+  lockedSyncConflict: {
+    id: 'invite.lockedSyncConflict',
+    defaultMessage:
+      'Invitations are not available while a server sync conflict is pending',
+  },
 });
 
 interface IProps extends WrappedComponentProps {
@@ -52,7 +61,8 @@ interface IProps extends WrappedComponentProps {
   embed?: boolean;
   isInviteSuccessful?: boolean;
   isLoadingInvite?: boolean;
-  isServerConnected?: boolean;
+  isWriteLocked?: boolean;
+  hasPendingSyncConflict?: boolean;
 }
 
 interface IState {
@@ -132,10 +142,11 @@ class Invite extends Component<IProps, IState> {
       embed = false,
       isInviteSuccessful = false,
       isLoadingInvite = false,
-      isServerConnected = true,
+      isWriteLocked = false,
+      hasPendingSyncConflict = false,
     } = this.props;
 
-    const isDisabled = !isServerConnected;
+    const isDisabled = isWriteLocked;
 
     const atLeastOneEmailAddress = form
       .$('invite')
@@ -151,7 +162,11 @@ class Invite extends Component<IProps, IState> {
       <>
         {isDisabled && embed && (
           <Infobox type="warning" icon="alert-circle-outline">
-            Invitations are not available while server is offline
+            {intl.formatMessage(
+              hasPendingSyncConflict
+                ? messages.lockedSyncConflict
+                : messages.lockedOffline,
+            )}
           </Infobox>
         )}
         {this.state.showSuccessInfo && isInviteSuccessful && (

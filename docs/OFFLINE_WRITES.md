@@ -86,6 +86,16 @@ to 30s when:
 - The user manually clicks "Retry sync" (starts fresh), OR
 - The server comes back online (automatic recovery).
 
+### 4. Embedded local server failures
+
+Local-only accounts (`LOCAL_SERVER`) are backed by Ferdium's embedded local
+API and SQLite database, not by the remote Ferdium API. Failures of that
+embedded server (for example, startup errors) are reported to the renderer
+via a dedicated IPC channel and surfaced as a distinct local-service banner
+with a restart action. They are never presented as remote-account sync
+conflicts, do not change the remote connection state, and do not engage the
+remote retry/backoff workflow.
+
 ## What is out of scope (and why)
 
 ### A. Queued sync for service mutations
@@ -108,21 +118,68 @@ would require migrating Electron session data between partition names when
 the placeholder ID is swapped for the server-assigned ID. That is a non-
 trivial Electron-level operation, so creation stays blocked for now.
 
-### C. UserStore writes (profile update, account deletion)
+### C. Offline mutation replay and offline service creation
 
-`UserStore._update` (`PUT /v1/me`) and `_delete` (`DELETE /v1/me`) are
-infrequent operations that users rarely perform during a server outage. They
-remain online-only. Low priority.
+Queuing and replaying mutations for deferred server sync, and creating
+services offline with temporary IDs, remain explicitly out of scope. Both
+depend on `ferdium-server` API changes (authoritative timestamps for conflict
+detection, idempotency keys, and/or a structured batch-sync endpoint) and, for
+creation, on migrating Electron session data between partition names when a
+placeholder ID is swapped for the server-assigned ID.
+
+## Shared write-lock rule
+
+All synchronized mutations are gated by a single source of truth:
+`RequestStore.isWriteLocked`. It returns `true` when writes must be blocked:
+
+- **Remote accounts** — while the server connection is `connecting` or
+  `disconnected`, OR while a service synchronization conflict is pending
+  resolution.
+- **Local-only accounts** (`LOCAL_SERVER`, backed by Ferdium's embedded local
+  API and SQLite database) — never locked by remote connection state, remote
+  health checks, or remote retry backoff. Local reads and writes continue to
+  use the embedded API.
+
+`RequestStore._verifyServerWritable()` is the store-level guard invoked before
+every synchronized write (service create/update/delete/reorder, workspace
+create/update/delete/reorder, user profile update, account deletion, password
+recovery, and invitations). For remote accounts it rejects immediately when a
+conflict is pending, and otherwise performs a live health check. A failed
+health check marks the connection `disconnected`. A successful health check
+only proves the server is reachable — it does NOT prove local and server data
+agree; full synchronization remains responsible for that decision.
+
+Store-level guards remain necessary even when the UI is disabled, because
+shortcuts, stale screens, or code outside the visible control can still invoke
+an action. UI controls consume the same `isWriteLocked` value so the interface
+and the stores enforce one consistent rule.
+
+## Synchronization conflicts
+
+When the local cached copy and the server copy meaningfully differ, the client
+does NOT guess which is newer. It keeps displaying the local cached copy,
+leaves the token-scoped cache unchanged, and shows the conflict warning. All
+synchronized writes stay locked until the user chooses "Use server version"
+(which applies the accepted server settings to the existing in-memory service
+objects) or transitions account/server (which clears the pending conflict).
+Conflict resolution never determines freshness automatically — it is an
+explicit user decision.
 
 ## Key files
 
-| File                                                   | Purpose                                                                           |
-| ------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| `src/stores/RequestStore.ts`                           | `serverConnection` state, `isWriteLocked`, exponential backoff                    |
-| `src/stores/ServicesStore.ts`                          | Server-first writes for create/update/delete/reorder, scaffolding for queued sync |
-| `src/components/settings/recipes/RecipeItem.tsx`       | Disabled state + tooltip                                                          |
-| `src/components/layout/Sidebar.tsx`                    | Disabled "+" button                                                               |
-| `src/components/settings/services/EditServiceForm.tsx` | Disabled save button                                                              |
-| `src/components/auth/SetupAssistant.tsx`               | Disabled submit button                                                            |
-| `src/styles/recipes.scss`                              | `.recipe-teaser--disabled`                                                        |
-| `src/styles/layout.scss`                               | `.sidebar__button--disabled`                                                      |
+| File                                                   | Purpose                                                                          |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `src/stores/RequestStore.ts`                           | `serverConnection` state, account-aware `isWriteLocked`, `_verifyServerWritable` |
+| `src/stores/ServicesStore.ts`                          | Server-first writes, in-place sync, conflict handling, cache persistence         |
+| `src/api/server/service-sync.ts`                       | Raw/model sync types and the server-owned field policy                           |
+| `src/api/server/ServerApi.ts`                          | Raw response preservation; cache written only after acceptance                   |
+| `src/stores/UserStore.ts`                              | Guards for profile update, account deletion, password recovery, invitations      |
+| `src/features/workspaces/store.ts`                     | Guards for workspace create/update/delete/reorder                                |
+| `src/components/services/tabs/Tabbar.tsx`              | Write-locked service reordering                                                  |
+| `src/components/services/tabs/TabItem.tsx`             | Write-locked context-menu mutations                                              |
+| `src/components/settings/recipes/RecipeItem.tsx`       | Disabled state + tooltip                                                         |
+| `src/components/layout/Sidebar.tsx`                    | Disabled "+" button                                                              |
+| `src/components/settings/services/EditServiceForm.tsx` | Disabled save button                                                             |
+| `src/components/auth/SetupAssistant.tsx`               | Disabled submit button                                                           |
+| `src/styles/recipes.scss`                              | `.recipe-teaser--disabled`                                                       |
+| `src/styles/layout.scss`                               | `.sidebar__button--disabled`                                                     |

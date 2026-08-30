@@ -137,8 +137,7 @@ class EditUserScreen extends Component<EditUserScreenProps> {
     }
 
     const form = this.prepareForm(user.data);
-    const isServerConnected =
-      this.props.stores.requests.serverConnection === 'connected';
+    const { isWriteLocked } = this.props.stores.requests;
     const { hasPendingSyncConflict } = this.props.stores.services;
 
     return (
@@ -148,7 +147,7 @@ class EditUserScreen extends Component<EditUserScreenProps> {
           form={form}
           isSaving={user.updateUserInfoRequest.isExecuting}
           onSubmit={d => this.onSubmit(d)}
-          isServerConnected={isServerConnected}
+          isWriteLocked={isWriteLocked}
           hasPendingSyncConflict={hasPendingSyncConflict}
         />
       </ErrorBoundary>

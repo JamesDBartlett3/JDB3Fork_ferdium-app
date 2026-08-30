@@ -28,25 +28,25 @@ interface IProps {
     serviceData: { isEnabled: boolean; isMediaPlaying: boolean };
     redirect: boolean;
   }) => void;
-  isServerConnected?: boolean;
+  isWriteLocked?: boolean;
 }
 
 @observer
 class TabBar extends Component<IProps> {
   onSortEnd = ({ oldIndex, newIndex }) => {
-    const { enableToolTip, reorder, isServerConnected = true } = this.props;
+    const { enableToolTip, reorder, isWriteLocked = false } = this.props;
 
     enableToolTip();
-    // Only allow reordering if server is connected
-    if (isServerConnected) {
+    // Only allow reordering when synchronized writes are permitted
+    if (!isWriteLocked) {
       reorder({ oldIndex, newIndex });
     }
   };
 
   shouldPreventSorting = event => {
-    const { isServerConnected = true } = this.props;
-    // Prevent sorting if server is disconnected OR if clicking on non-LI element
-    return !isServerConnected || event.target.tagName !== 'LI';
+    const { isWriteLocked = false } = this.props;
+    // Prevent sorting while write-locked OR if clicking on non-LI element
+    return isWriteLocked || event.target.tagName !== 'LI';
   };
 
   toggleService = (args: { serviceId: string; isEnabled: boolean }) => {

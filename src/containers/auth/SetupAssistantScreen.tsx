@@ -100,7 +100,7 @@ class SetupAssistantScreen extends Component<IProps, IState> {
         services={this.services}
         // embed={false} // TODO: [TS DEBT][PROP NOT USED IN COMPONENT] check legacy services type
         isSettingUpServices={this.state.isSettingUpServices}
-        isServerReachable={!requests.isWriteLocked}
+        isWriteLocked={requests.isWriteLocked}
       />
     );
   }

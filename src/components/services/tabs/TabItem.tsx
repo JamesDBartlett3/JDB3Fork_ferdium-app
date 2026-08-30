@@ -256,8 +256,15 @@ class TabItem extends Component<IProps, IState> {
       showMessageBadgeWhenMutedSetting,
       showServiceNameSetting,
       showMessageBadgesEvenWhenMuted,
+      stores,
     } = this.props;
     const { intl } = this.props;
+
+    // Shared write-lock: synchronized mutations (notification/audio/dark-mode
+    // toggles, enable/disable, delete) are disabled while writes are locked.
+    // Device-only actions (reload, clear cache) and local runtime actions
+    // (hibernate/wake) stay available regardless of the lock.
+    const isWriteLocked = stores?.requests.isWriteLocked ?? false;
 
     const menuTemplate: MenuItemConstructorOptions[] = [
       {
@@ -289,7 +296,7 @@ class TabItem extends Component<IProps, IState> {
           : intl.formatMessage(messages.enableNotifications),
         click: () => toggleNotifications(),
         accelerator: `${cmdOrCtrlShortcutKey()}+${altKey()}+N`,
-        enabled: service.isEnabled,
+        enabled: service.isEnabled && !isWriteLocked,
       },
       {
         label: service.isMuted
@@ -297,7 +304,7 @@ class TabItem extends Component<IProps, IState> {
           : intl.formatMessage(messages.disableAudio),
         click: () => toggleAudio(),
         accelerator: `${cmdOrCtrlShortcutKey()}+${shiftKey()}+A`,
-        enabled: service.isEnabled,
+        enabled: service.isEnabled && !isWriteLocked,
       },
       {
         label: service.isDarkModeEnabled
@@ -305,7 +312,7 @@ class TabItem extends Component<IProps, IState> {
           : intl.formatMessage(messages.enableDarkMode),
         click: () => toggleDarkMode(),
         accelerator: `${shiftKey()}+${altKey()}+D`,
-        enabled: service.isEnabled,
+        enabled: service.isEnabled && !isWriteLocked,
       },
       {
         label: intl.formatMessage(
@@ -313,6 +320,7 @@ class TabItem extends Component<IProps, IState> {
         ),
         click: () => (service.isEnabled ? disableService() : enableService()),
         accelerator: `${cmdOrCtrlShortcutKey()}+${shiftKey()}+S`,
+        enabled: !isWriteLocked,
       },
       {
         label: intl.formatMessage(
@@ -335,6 +343,7 @@ class TabItem extends Component<IProps, IState> {
       },
       {
         label: intl.formatMessage(messages.deleteService),
+        enabled: !isWriteLocked,
         click: () => {
           // @ts-expect-error Fix me
           const selection = dialog.showMessageBoxSync(app.mainWindow, {

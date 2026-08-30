@@ -15,11 +15,7 @@ import { H1 } from '../../components/ui/headline';
 import Infobox from '../../components/ui/infobox/index';
 import ErrorBoundary from '../../components/util/ErrorBoundary';
 import withParams from '../../components/util/WithParams';
-import {
-  CUSTOM_WEBSITE_RECIPE_ID,
-  FERDIUM_DEV_DOCS,
-  LOCAL_SERVER,
-} from '../../config';
+import { CUSTOM_WEBSITE_RECIPE_ID, FERDIUM_DEV_DOCS } from '../../config';
 import { userDataRecipesPath } from '../../environment-remote';
 import { communityRecipesStore } from '../../features/communityRecipes';
 import { asarRecipesPath } from '../../helpers/asar-helpers';
@@ -149,8 +145,7 @@ class RecipesScreen extends Component<IProps, IState> {
   }
 
   render(): ReactElement {
-    const { recipePreviews, recipes, services, requests, settings } =
-      this.props.stores!;
+    const { recipePreviews, recipes, services, requests } = this.props.stores!;
     const { app: appActions, service: serviceActions } = this.props.actions!;
     const filter = this.state.currentFilter;
 
@@ -199,11 +194,13 @@ class RecipesScreen extends Component<IProps, IState> {
 
     const recipeDirectory = userDataRecipesPath('dev');
 
-    // Determine if this is a remote-synced account
-    const isRemoteAccount = settings.all.app.server !== LOCAL_SERVER;
-
-    // For remote accounts that are offline, show offline warning
-    if (isRemoteAccount && requests.serverConnection === 'disconnected') {
+    // Recipe browsing needs the server for recipe previews; show the offline
+    // warning only for remote-synced accounts that are actually disconnected.
+    // (Write gating below uses the shared isWriteLocked rule.)
+    if (
+      !requests.isLocalOnlyAccount &&
+      requests.serverConnection === 'disconnected'
+    ) {
       return (
         <ErrorBoundary>
           <div className="settings__main">
@@ -241,8 +238,7 @@ class RecipesScreen extends Component<IProps, IState> {
           openDevDocs={() =>
             appActions.openExternalUrl({ url: FERDIUM_DEV_DOCS })
           }
-          isServerReachable={requests.serverConnection === 'connected'}
-          hasPendingSyncConflict={services.hasPendingSyncConflict}
+          isWriteLocked={requests.isWriteLocked}
         />
       </ErrorBoundary>
     );

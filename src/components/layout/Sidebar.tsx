@@ -194,7 +194,7 @@ class Sidebar extends Component<IProps, IState> {
     const { isMenuCollapsed } = stores!.settings.all.app;
 
     const { isDownloading, justFinishedDownloading } = stores!.app;
-    const isServerReachable = !stores!.requests.isWriteLocked;
+    const canWriteSyncedData = !stores!.requests.isWriteLocked;
 
     return (
       <div className="sidebar">
@@ -222,7 +222,7 @@ class Sidebar extends Component<IProps, IState> {
           clearCache={this.props.clearCache}
           hibernateService={this.props.hibernateService}
           wakeUpService={this.props.wakeUpService}
-          isServerConnected={stores!.requests.serverConnection === 'connected'}
+          isWriteLocked={stores!.requests.isWriteLocked}
         />
         {numberActiveButtons <= 1 || hideCollapseButton ? null : (
           <button
@@ -245,14 +245,15 @@ class Sidebar extends Component<IProps, IState> {
           <button
             type="button"
             onClick={() => {
-              if (isServerReachable) openSettings({ path: 'recipes' });
+              if (canWriteSyncedData) openSettings({ path: 'recipes' });
             }}
             className={`sidebar__button sidebar__button--new-service${
-              isServerReachable ? '' : ' sidebar__button--disabled'
+              canWriteSyncedData ? '' : ' sidebar__button--disabled'
             }`}
+            aria-disabled={!canWriteSyncedData}
             data-tooltip-id="tooltip-sidebar-button"
             data-tooltip-content={
-              isServerReachable
+              canWriteSyncedData
                 ? `${intl.formatMessage(messages.addNewService)} (${addNewServiceShortcutKey(
                     false,
                   )})`

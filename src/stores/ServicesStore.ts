@@ -16,6 +16,10 @@ import ms from 'ms';
 import type { Stores } from '../@types/stores.types';
 import type { Actions } from '../actions/lib/actions';
 import type { ApiInterface } from '../api';
+import {
+  type ServiceSyncResult,
+  applyServerOwnedFields,
+} from '../api/server/service-sync';
 import { DEFAULT_SERVICE_SETTINGS, KEEP_WS_LOADED_USID } from '../config';
 import { ferdiumVersion } from '../environment-remote';
 import { workspaceStore } from '../features/workspaces';
@@ -80,7 +84,20 @@ export default class ServicesStore extends TypedStore {
   // No service ID should be in the list multiple times, not all service IDs have to be in the list
   @observable lastUsedServices: string[] = [];
 
-  @observable pendingServerSyncServices: Service[] | null = null;
+  // Holds the full pending raw/model sync result while a conflict awaits
+  // user resolution. Kept token/server-scoped: cleared on logout, account
+  // change, or server change so one account's pending data is never applied
+  // to another.
+  @observable pendingServerSyncServices: ServiceSyncResult | null = null;
+
+  // Snapshot of the account context (auth token + configured server) captured
+  // when a sync starts. Used to discard responses that complete after a
+  // logout, login, or server change.
+  _syncContext: { token: string | null; server: string } | null = null;
+
+  // True while a pending "Use server version" application is in progress, so
+  // a second click cannot apply the same pending result twice.
+  @observable isApplyingPendingSync = false;
 
   // Tracks the last auth token seen by _loginReaction, so we only invalidate
   // + re-sync on actual login transitions (not on every boot).
@@ -1252,90 +1269,137 @@ export default class ServicesStore extends TypedStore {
     ms('100ms'),
   );
 
+  // Capture the account context (token + configured server) that a sync is
+  // bound to, so a response completing after a logout/login/server change can
+  // be discarded instead of applied to the wrong account.
+  _captureSyncContext() {
+    return {
+      token:
+        (this.stores.user.authToken as unknown as string | null) ??
+        (typeof window === 'undefined'
+          ? null
+          : window.localStorage.getItem('authToken')),
+      server: this.stores.settings.all.app.server,
+    };
+  }
+
+  _isSyncContextCurrent(context: { token: string | null; server: string }) {
+    const current = this._captureSyncContext();
+    return current.token === context.token && current.server === context.server;
+  }
+
+  // Clear pending conflict state. Called on logout, account change, and
+  // server change so a stale conflict from one account is never shown or
+  // applied to another.
+  @action _clearPendingSyncState() {
+    this.pendingServerSyncServices = null;
+    this.isApplyingPendingSync = false;
+    this._syncContext = null;
+  }
+
   async _syncFromServer() {
+    // Bind this sync to the account context that started it.
+    const context = this._captureSyncContext();
+    this._syncContext = context;
+
     try {
-      const serverServices = await this.syncServicesRequest.execute().promise;
+      const syncResult: ServiceSyncResult =
+        await this.syncServicesRequest.execute().promise;
+
+      // Discard the response if the account context changed while the
+      // request was in flight (logout, login as another user, server change).
+      if (!this._isSyncContextCurrent(context)) {
+        debug(
+          'ServicesStore::_syncFromServer discarding stale response (account/server changed during sync)',
+        );
+        return;
+      }
+
+      const serverServices = syncResult.entries.map(e => e.model);
       const localServices = this.allServicesRequest.result || [];
+
+      // Local-only accounts are backed by the embedded local API and SQLite
+      // database, which is the accepted source of truth (writes are committed
+      // there before local state changes). A difference between the embedded
+      // database and the renderer cache is therefore NOT a synchronization
+      // conflict — apply the database copy directly.
+      const isLocalOnlyAccount =
+        this.stores.requests.isLocalOnlyAccount === true;
 
       // When there are no local services yet (e.g. empty cache on startup or
       // right after login), there is nothing to lose, so adopt the server
       // version silently instead of prompting the user to resolve a conflict.
       if (
+        !isLocalOnlyAccount &&
         localServices.length > 0 &&
         hasServicesSyncConflict(localServices, serverServices)
       ) {
+        // Keep displaying the local cached copy and leave the token-scoped
+        // cache unchanged while the conflict is pending. Store the FULL
+        // raw/model result so it can be applied later after approval.
         runInAction(() => {
-          this.pendingServerSyncServices = serverServices;
+          this.pendingServerSyncServices = syncResult;
         });
         return;
       }
 
-      await this._applyServerServices(serverServices);
+      await this._applyServerServices(syncResult);
     } catch (error) {
       debug('ServicesStore::_syncFromServer failed, using local cache', error);
       throw error;
     }
   }
 
-  // Merges server services into the local state, preserving webview runtime
-  // state (isFirstLoad, isLoading, isAttached, webview reference, unread
-  // counts, etc.) for services that already exist locally. Services that are
-  // new (from the server) get added as-is with default runtime state. Services
-  // that exist locally but not on the server are dropped (the server is the
-  // source of truth for the service list).
+  // Applies an accepted server sync result IN PLACE.
+  //
+  // Object-identity rules:
+  //  - A service whose `id` AND `recipeId` match an existing local service
+  //    reuses the existing object; only server-owned properties are written
+  //    onto it. Webview references, event handlers, loading state, unread
+  //    counts, crash state, and other client-only runtime state stay attached.
+  //  - A service present on the server but not locally uses the prepared new
+  //    model (default runtime state).
+  //  - A service present locally but absent from the accepted server list is
+  //    dropped (the server is the source of truth for the service list).
+  //  - The array itself may be replaced, but an existing service inside it
+  //    keeps the same object reference.
   //
   // Uses `.then()` rather than awaiting `patch()` directly because
   // CachedRequest is itself a thenable, which makes awaiting it directly
   // invalid (TS1320).
-  _applyServerServices(services: Service[]) {
+  _applyServerServices(syncResult: ServiceSyncResult) {
     return this.allServicesRequest
-      .patch(existing => {
-        if (!existing || existing.length === 0) {
-          return services;
-        }
-
-        // Build a lookup of existing services by ID for quick merge.
-        const existingById = new Map<string, Service>();
-        for (const s of existing) {
-          existingById.set(s.id, s);
-        }
-
-        // Merge: for each server service, if it existed locally, copy the
-        // webview-runtime state onto the new model. Otherwise use as-is.
-        return services.map(serverService => {
-          const local = existingById.get(serverService.id);
-          if (!local) {
-            // New service from server — keep default runtime state.
-            return serverService;
+      .patch(
+        action((existing: Service[] | null) => {
+          const existingById = new Map<string, Service>();
+          for (const s of existing ?? []) {
+            existingById.set(s.id, s);
           }
-          // Preserve webview runtime state that the server doesn't return.
-          // These fields are client-side only and losing them causes the
-          // infinite "Loading" spinner (isFirstLoad/isLoading) and other
-          // webview lifecycle issues.
-          /* eslint-disable no-param-reassign */
-          serverService.isAttached = local.isAttached;
-          serverService.isFirstLoad = local.isFirstLoad;
-          serverService.isLoading = local.isLoading;
-          serverService.isLoadingPage = local.isLoadingPage;
-          serverService.isError = local.isError;
-          serverService.errorMessage = local.errorMessage;
-          serverService.webview = local.webview;
-          serverService.unreadDirectMessageCount =
-            local.unreadDirectMessageCount;
-          serverService.unreadIndirectMessageCount =
-            local.unreadIndirectMessageCount;
-          serverService.dialogTitle = local.dialogTitle;
-          serverService.hasCrashed = local.hasCrashed;
-          serverService.isHibernationRequested = local.isHibernationRequested;
-          serverService.lastPoll = local.lastPoll;
-          serverService.lastPollAnswer = local.lastPollAnswer;
-          /* eslint-enable no-param-reassign */
-          return serverService;
-        });
-      })
+
+          const next: Service[] = [];
+          for (const entry of syncResult.entries) {
+            const { raw, model } = entry;
+            const local = existingById.get(model.id);
+            if (local && local.recipe?.id === model.recipe?.id) {
+              // In-place reuse: apply only accepted server-owned properties.
+              applyServerOwnedFields(local, raw);
+              next.push(local);
+            } else {
+              // Genuinely new service, or exceptional identity change (recipe
+              // changed beneath a matching id) — use the fresh model so React
+              // mounts a fresh service view.
+              next.push(model);
+            }
+          }
+          return next;
+        }),
+      )
       .then(
         action(() => {
-          this.api.services.cacheFromModels(services);
+          // Persist the FINAL accepted array (reused + new references), not
+          // the temporary incoming model array.
+          const accepted = this.allServicesRequest.result || [];
+          this.api.services.cacheFromModels(accepted);
           this.pendingServerSyncServices = null;
         }),
       );
@@ -1346,21 +1410,33 @@ export default class ServicesStore extends TypedStore {
   }
 
   @action async applyPendingServerSync() {
-    if (!this.pendingServerSyncServices) {
+    if (!this.pendingServerSyncServices || this.isApplyingPendingSync) {
       return;
     }
 
-    const pendingServices = this.pendingServerSyncServices;
+    const pendingResult = this.pendingServerSyncServices;
+    this.isApplyingPendingSync = true;
     try {
-      await this._applyServerServices(pendingServices);
+      // Pass the full raw/model result so existing objects are reused and
+      // updated in place wherever identity matches.
+      await this._applyServerServices(pendingResult);
+      // Conflict is cleared inside _applyServerServices only after the patch
+      // and cache persistence succeed, so a failure leaves it pending.
     } catch (error) {
       debug('ServicesStore::applyPendingServerSync failed', error);
+    } finally {
+      runInAction(() => {
+        this.isApplyingPendingSync = false;
+      });
     }
   }
 
-  @action dismissPendingServerSync() {
-    this.pendingServerSyncServices = null;
-  }
+  // NOTE: `dismissPendingServerSync` previously dropped the pending conflict
+  // without applying it, which silently unlocked writes while the local and
+  // server copies still differed. That is intentionally no longer possible:
+  // the conflict stays pending until the user chooses "Use server version"
+  // (or logs out / switches account or server, which clears it as part of the
+  // account transition).
 
   /**
    * Replay any service writes (update / delete / reorder) that were queued
@@ -1625,6 +1701,9 @@ export default class ServicesStore extends TypedStore {
         key: 'activeService',
       });
       this.allServicesRequest.invalidate().reset();
+      // Discard any pending conflict immediately so it cannot be shown to or
+      // applied to the next account.
+      this._clearPendingSyncState();
       // Write-queue mechanism removed; no queued writes to clear on logout.
     }
   }
@@ -1653,6 +1732,9 @@ export default class ServicesStore extends TypedStore {
       // would destroy the in-memory service models and cause the webview
       // lifecycle events to never re-wire (infinite spinner).
       if (this._lastSeenToken !== null && this._lastSeenToken !== token) {
+        // The account changed: discard any pending conflict from the previous
+        // account so it is never displayed or applied under the new one.
+        this._clearPendingSyncState();
         if (this.allServicesRequest.wasExecuted) {
           runInAction(() => {
             this.allServicesRequest.invalidate();

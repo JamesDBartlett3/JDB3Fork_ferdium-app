@@ -54,6 +54,11 @@ export default (params: { mainWindow: BrowserWindow }) => {
       });
     })().catch(error => {
       console.error('Error while starting local server', error);
+      // Surface the failure to the renderer so it can be shown as a distinct
+      // local-service error instead of a remote-account sync problem.
+      params.mainWindow.webContents.send('localServerError', {
+        message: error instanceof Error ? error.message : String(error),
+      });
     });
   });
 };

@@ -53,7 +53,7 @@ const messages = defineMessages({
   servicesSyncConflict: {
     id: 'infobar.servicesSyncConflict',
     defaultMessage:
-      'Service changes differ between local cache and server. Sync with the server to continue making changes.',
+      'Service changes differ between this device and the server. Your local services remain visible, but synchronized changes are paused until you accept the server version.',
   },
   buttonUseServerVersion: {
     id: 'infobar.buttonUseServerVersion',
@@ -63,6 +63,23 @@ const messages = defineMessages({
     id: 'infobar.authRequestFailed',
     defaultMessage:
       'There were errors while trying to perform an authenticated request. Please try logging out and back in if this error persists.',
+  },
+  buttonRetrySync: {
+    id: 'infobar.buttonRetrySync',
+    defaultMessage: 'Retry sync',
+  },
+  localServerFailed: {
+    id: 'infobar.localServerFailed',
+    defaultMessage:
+      'The embedded local service database could not be started. Local services and workspaces are unavailable until it restarts.',
+  },
+  buttonRetryLocalServer: {
+    id: 'infobar.buttonRetryLocalServer',
+    defaultMessage: 'Restart local service',
+  },
+  buttonTryAgain: {
+    id: 'infobar.buttonTryAgain',
+    defaultMessage: 'Try again',
   },
 });
 
@@ -104,7 +121,10 @@ interface IProps extends WrappedComponentProps, WithStylesProps<typeof styles> {
   retryRequiredRequests: () => void;
   areRequiredRequestsLoading: boolean;
   serverConnection: 'connected' | 'connecting' | 'disconnected';
+  hasLocalServerError: boolean;
+  retryLocalServer: () => void;
   hasPendingSyncConflict: boolean;
+  isApplyingPendingSync: boolean;
   applyPendingServerSync: () => void;
 }
 
@@ -139,7 +159,10 @@ class AppLayout extends Component<PropsWithChildren<IProps>, IState> {
       retryRequiredRequests,
       areRequiredRequestsLoading,
       serverConnection,
+      hasLocalServerError,
+      retryLocalServer,
       hasPendingSyncConflict,
+      isApplyingPendingSync,
       applyPendingServerSync,
       updateVersion,
       isUpdateAvailable,
@@ -180,7 +203,7 @@ class AppLayout extends Component<PropsWithChildren<IProps>, IState> {
                 {authRequestFailed && (
                   <InfoBar
                     type="danger"
-                    ctaLabel="Try again"
+                    ctaLabel={intl.formatMessage(messages.buttonTryAgain)}
                     ctaLoading={areRequiredRequestsLoading}
                     sticky
                     onClick={retryRequiredRequests}
@@ -198,7 +221,7 @@ class AppLayout extends Component<PropsWithChildren<IProps>, IState> {
                 {serverConnection === 'disconnected' && (
                   <InfoBar
                     type="danger"
-                    ctaLabel="Retry sync"
+                    ctaLabel={intl.formatMessage(messages.buttonRetrySync)}
                     ctaLoading={areRequiredRequestsLoading}
                     sticky
                     onClick={retryRequiredRequests}
@@ -207,12 +230,26 @@ class AppLayout extends Component<PropsWithChildren<IProps>, IState> {
                     {intl.formatMessage(messages.servicesSyncFailed)}
                   </InfoBar>
                 )}
+                {hasLocalServerError && (
+                  <InfoBar
+                    type="danger"
+                    ctaLabel={intl.formatMessage(
+                      messages.buttonRetryLocalServer,
+                    )}
+                    sticky
+                    onClick={retryLocalServer}
+                  >
+                    <Icon icon={mdiFlash} />
+                    {intl.formatMessage(messages.localServerFailed)}
+                  </InfoBar>
+                )}
                 {hasPendingSyncConflict && (
                   <InfoBar
                     type="warning"
                     ctaLabel={intl.formatMessage(
                       messages.buttonUseServerVersion,
                     )}
+                    ctaLoading={isApplyingPendingSync}
                     sticky
                     onClick={applyPendingServerSync}
                   >

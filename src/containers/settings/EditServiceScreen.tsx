@@ -518,8 +518,7 @@ class EditServiceScreen extends Component<IProps> {
       services,
       //  user
     } = this.props.stores;
-    const isServerReachable = !this.props.stores.requests.isWriteLocked;
-    const { hasPendingSyncConflict } = this.props.stores.services;
+    const { isWriteLocked } = this.props.stores.requests;
     const { action } = this.props.params;
 
     let recipe: IRecipe | null = null;
@@ -565,8 +564,7 @@ class EditServiceScreen extends Component<IProps> {
             services.createServiceRequest.isExecuting
           }
           isDeleting={services.deleteServiceRequest.isExecuting}
-          isServerReachable={isServerReachable}
-          hasPendingSyncConflict={hasPendingSyncConflict}
+          isWriteLocked={isWriteLocked}
           onSubmit={d => this.onSubmit(d)}
           onDelete={() => this.deleteService()}
           onClearCache={() => this.clearCache()}

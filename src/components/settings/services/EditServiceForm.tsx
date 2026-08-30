@@ -190,8 +190,7 @@ interface IProps extends WrappedComponentProps {
   isSaving: boolean;
   isDeleting: boolean;
   isProxyFeatureEnabled: boolean;
-  isServerReachable: boolean;
-  hasPendingSyncConflict?: boolean;
+  isWriteLocked?: boolean;
 }
 
 interface IState {
@@ -258,13 +257,14 @@ class EditServiceForm extends Component<IProps, IState> {
       onClearCache,
       openRecipeFile,
       isProxyFeatureEnabled,
-      isServerReachable,
-      hasPendingSyncConflict = false,
+      isWriteLocked = false,
       intl,
     } = this.props;
     const { isValidatingCustomUrl } = this.state;
 
-    const isFormDisabled = hasPendingSyncConflict;
+    // The shared write-lock covers both offline and pending-conflict states,
+    // so form fields, save, and delete all follow one rule.
+    const isFormDisabled = isWriteLocked;
 
     const deleteButton = isDeleting ? (
       <Button
@@ -280,18 +280,14 @@ class EditServiceForm extends Component<IProps, IState> {
           buttonType="danger"
           label={intl.formatMessage(messages.deleteService)}
           className="settings__delete-button"
-          disabled={!isServerReachable || isFormDisabled}
+          disabled={isWriteLocked}
           data-tooltip-id={
-            !isServerReachable || isFormDisabled
-              ? 'tooltip-delete-service-offline'
-              : undefined
+            isWriteLocked ? 'tooltip-delete-service-offline' : undefined
           }
           data-tooltip-content={
-            isFormDisabled
+            isWriteLocked
               ? intl.formatMessage(messages.offlineDeleteTooltip)
-              : isServerReachable
-                ? undefined
-                : intl.formatMessage(messages.offlineDeleteTooltip)
+              : undefined
           }
           onClick={() => {
             // @ts-expect-error Fix me
@@ -709,17 +705,16 @@ class EditServiceForm extends Component<IProps, IState> {
                 label={intl.formatMessage(messages.saveService)}
                 htmlForm="form"
                 disabled={
-                  isFormDisabled ||
-                  !isServerReachable ||
+                  isWriteLocked ||
                   (action !== 'edit' && form.isPristine && requiresUserInput)
                 }
                 data-tooltip-id={
-                  isServerReachable ? undefined : 'tooltip-save-service-offline'
+                  isWriteLocked ? 'tooltip-save-service-offline' : undefined
                 }
                 data-tooltip-content={
-                  isServerReachable
-                    ? undefined
-                    : intl.formatMessage(messages.offlineSaveTooltip)
+                  isWriteLocked
+                    ? intl.formatMessage(messages.offlineSaveTooltip)
+                    : undefined
                 }
               />
               <ReactTooltip

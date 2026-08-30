@@ -146,7 +146,7 @@ interface IProps extends WithStylesProps<typeof styles>, WrappedComponentProps {
   isInviteSuccessful?: boolean;
   services: any; // TODO: [TS DEBT] check legacy services type
   isSettingUpServices: boolean;
-  isServerReachable: boolean;
+  isWriteLocked: boolean;
 }
 
 interface IState {
@@ -197,7 +197,7 @@ class SetupAssistant extends Component<IProps, IState> {
       onSubmit,
       services,
       isSettingUpServices,
-      isServerReachable,
+      isWriteLocked,
       intl,
     } = this.props;
     const {
@@ -329,17 +329,15 @@ class SetupAssistant extends Component<IProps, IState> {
           onClick={() => onSubmit(this.state.services)}
           busy={isSettingUpServices}
           disabled={
-            isSettingUpServices ||
-            addedServices.length === 0 ||
-            !isServerReachable
+            isSettingUpServices || addedServices.length === 0 || isWriteLocked
           }
           data-tooltip-id={
-            isServerReachable ? undefined : 'tooltip-setup-assistant-offline'
+            isWriteLocked ? 'tooltip-setup-assistant-offline' : undefined
           }
           data-tooltip-content={
-            isServerReachable
-              ? undefined
-              : intl.formatMessage(messages.offlineTooltip)
+            isWriteLocked
+              ? intl.formatMessage(messages.offlineTooltip)
+              : undefined
           }
         />
         <ReactTooltip

@@ -14,12 +14,22 @@ jest.mock('@electron/remote', () => ({
   webContents: { fromId: jest.fn() },
 }));
 
-// The cache-key methods under test do not use the Service model at runtime.
-// Mock it to avoid loading its heavy electron/DOM dependency tree under Jest.
+// The Service model is mocked with a data-carrying stub so tests can verify
+// raw/model pairing without loading its heavy electron/DOM dependency tree.
 jest.mock('../../src/models/Service', () => ({
   __esModule: true,
   // eslint-disable-next-line @typescript-eslint/no-extraneous-class
-  default: class ServiceModelMock {},
+  default: class ServiceModelMock {
+    constructor(data: any) {
+      Object.assign(this, data);
+    }
+  },
+}));
+
+jest.mock('../../src/api/utils/auth', () => ({
+  prepareAuthRequest: jest.fn((options: any) => options),
+  prepareLocalToken: jest.fn(),
+  sendAuthRequest: jest.fn(),
 }));
 
 jest.mock('../../src/helpers/recipe-helpers', () => ({
@@ -139,5 +149,138 @@ describe('ServerApi cache key migration', () => {
     window.localStorage.setItem('authToken', 'user-2-token');
 
     expect(api.getCachedServicesRaw()).toEqual([]);
+  });
+});
+
+// Pre-load recipes so _bulkRecipeCheck never attempts a download.
+const createApiWithRecipes = () => {
+  const { default: ServerApi } = require('../../src/api/server/ServerApi');
+  const api = new ServerApi();
+  api.recipes = [{ id: 'slack' }, { id: 'discord' }];
+  return api;
+};
+
+// Captured lazily: jest.resetModules() in beforeEach replaces the mocked
+// module instance, so a describe-level reference would go stale.
+const getSendAuthRequestMock = () =>
+  jest.requireMock('../../src/api/utils/auth').sendAuthRequest;
+
+const mockServerResponse = (services: any[]) => {
+  getSendAuthRequestMock().mockResolvedValue({
+    ok: true,
+    json: async () => services,
+  });
+};
+
+describe('ServerApi service synchronization', () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+    Object.defineProperty(globalThis, 'window', {
+      value: {
+        localStorage: createLocalStorage(),
+        ferdium: {
+          stores: {
+            settings: { all: { app: { server: 'https://api.ferdium.org' } } },
+            requests: { localServerPort: 46_569 },
+          },
+        },
+      },
+      writable: true,
+      configurable: true,
+    });
+    // Silence expected warnings from the failing-preparation paths.
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('returns raw responses paired with their prepared models by service id', async () => {
+    const api = createApiWithRecipes();
+    const rawSlack = createServerService({
+      id: 'svc-slack',
+      recipeId: 'slack',
+    });
+    const rawDiscord = createServerService({
+      id: 'svc-discord',
+      recipeId: 'discord',
+      name: 'Discord',
+    });
+    mockServerResponse([rawSlack, rawDiscord]);
+
+    const result = await api.getServices();
+
+    expect(result.entries).toHaveLength(2);
+    // Raw payload preserved verbatim, paired with the matching model.
+    expect(result.entries[0].raw).toBe(rawSlack);
+    expect(result.entries[0].model.id).toBe('svc-slack');
+    expect(result.entries[1].raw).toBe(rawDiscord);
+    expect(result.entries[1].model.id).toBe('svc-discord');
+  });
+
+  it('preserves explicit null, false, 0 and empty-string values in prepared models', async () => {
+    const api = createApiWithRecipes();
+    const raw = createServerService({
+      id: 'svc-1',
+      recipeId: 'slack',
+      iconUrl: null,
+      isMuted: false,
+      order: 0,
+      team: '',
+    });
+    mockServerResponse([raw]);
+
+    const result = await api.getServices();
+    const { model } = result.entries[0];
+
+    expect(model.iconUrl).toBeNull();
+    expect(model.isMuted).toBe(false);
+    expect(model.order).toBe(0);
+    expect(model.team).toBe('');
+  });
+
+  it('does not write the incoming response to the cache before acceptance', async () => {
+    const api = createApiWithRecipes();
+    mockServerResponse([createServerService({ id: 'svc-1' })]);
+
+    await api.getServices();
+
+    // No token-scoped cache key may be written by getServices itself.
+    expect(api.getCachedServicesRaw()).toEqual([]);
+  });
+
+  it('rejects the whole result when any raw service cannot be prepared', async () => {
+    const api = createApiWithRecipes();
+    const good = createServerService({ id: 'svc-good', recipeId: 'slack' });
+    // Recipe not installed and not downloadable in the test environment.
+    const bad = createServerService({
+      id: 'svc-bad',
+      recipeId: 'nonexistent-recipe',
+    });
+    mockServerResponse([good, bad]);
+
+    await expect(api.getServices()).rejects.toThrow(
+      /Unable to prepare service 'svc-bad'/,
+    );
+  });
+
+  it('distinguishes a genuinely empty server list from an all-failed response', async () => {
+    const api = createApiWithRecipes();
+
+    // Empty list: valid result with no entries — NOT an error.
+    await expect(api.prepareServiceSyncResult([])).resolves.toEqual({
+      entries: [],
+    });
+
+    // Non-empty list where every service fails preparation: must reject so the
+    // caller does not interpret it as a server-side deletion of everything.
+    await expect(
+      api.prepareServiceSyncResult([
+        createServerService({ id: 'svc-x', recipeId: 'nonexistent-recipe' }),
+      ]),
+    ).rejects.toThrow(/Unable to prepare service/);
   });
 });
