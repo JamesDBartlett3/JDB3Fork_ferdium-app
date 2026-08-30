@@ -79,6 +79,8 @@ interface IProps extends WithStylesProps<typeof styles>, WrappedComponentProps {
   onCreateWorkspaceSubmit: (workspace: Workspace) => void;
   onWorkspaceClick: (workspace: Workspace) => void;
   workspaces: Workspace[];
+  isServerConnected: boolean;
+  hasPendingSyncConflict?: boolean;
 }
 
 @observer
@@ -93,6 +95,7 @@ class WorkspacesDashboard extends Component<IProps> {
       onCreateWorkspaceSubmit,
       onWorkspaceClick,
       workspaces,
+      hasPendingSyncConflict = false,
     } = this.props;
 
     const { intl } = this.props;
@@ -138,6 +141,8 @@ class WorkspacesDashboard extends Component<IProps> {
             <CreateWorkspaceForm
               isSubmitting={createWorkspaceRequest.isExecuting}
               onSubmit={onCreateWorkspaceSubmit}
+              isServerConnected={this.props.isServerConnected}
+              hasPendingSyncConflict={hasPendingSyncConflict}
             />
           </div>
           {getUserWorkspacesRequest.isExecuting ? (

@@ -80,6 +80,8 @@ interface IProps extends WithStylesProps<typeof styles>, WrappedComponentProps {
   workspace: Workspace;
   updateWorkspaceRequest: Request;
   deleteWorkspaceRequest: Request;
+  isServerConnected?: boolean;
+  hasPendingSyncConflict?: boolean;
 }
 
 @observer
@@ -161,11 +163,14 @@ class EditWorkspaceForm extends Component<IProps> {
       deleteWorkspaceRequest,
       updateWorkspaceRequest,
       intl,
+      isServerConnected = true,
+      hasPendingSyncConflict = false,
     } = this.props;
     const { form } = this;
     const workspaceServices = form.$('services').value;
     const isDeleting = deleteWorkspaceRequest.isExecuting;
     const isSaving = updateWorkspaceRequest.isExecuting;
+    const isDisabled = !isServerConnected || hasPendingSyncConflict;
 
     return (
       <div className="settings__main">
@@ -185,14 +190,17 @@ class EditWorkspaceForm extends Component<IProps> {
             </Infobox>
           ) : null}
           <div className={classes.nameInput}>
-            <Input {...form.$('name').bind()} />
-            <Toggle {...form.$('keepLoaded').bind()} />
+            <Input {...form.$('name').bind()} disabled={isDisabled} />
+            <Toggle {...form.$('keepLoaded').bind()} disabled={isDisabled} />
             <p className={`${classes.keepLoadedInfo} franz-form__label`}>
               {intl.formatMessage(messages.keepLoadedInfo)}
             </p>
           </div>
           <H2>{intl.formatMessage(messages.servicesInWorkspaceHeadline)}</H2>
-          <div className={classes.serviceList}>
+          <div
+            className={classes.serviceList}
+            style={{ opacity: isDisabled ? 0.5 : 1 }}
+          >
             {services.length === 0 ? (
               <div className="align-middle settings__empty-state">
                 {/* ===== Empty state ===== */}
@@ -213,7 +221,11 @@ class EditWorkspaceForm extends Component<IProps> {
                     key={service.id}
                     service={service}
                     isInWorkspace={workspaceServices.includes(service.id)}
-                    onToggle={() => this.toggleService(service)}
+                    onToggle={() => {
+                      if (!isDisabled) {
+                        this.toggleService(service);
+                      }
+                    }}
                   />
                 ))}
               </>
@@ -228,7 +240,7 @@ class EditWorkspaceForm extends Component<IProps> {
             busy={isDeleting}
             buttonType={isDeleting ? 'secondary' : 'danger'}
             className="settings__delete-button"
-            disabled={isDeleting}
+            disabled={isDeleting || isDisabled}
             // eslint-disable-next-line react/jsx-no-bind
             onClick={this.delete.bind(this)}
           />
@@ -242,7 +254,7 @@ class EditWorkspaceForm extends Component<IProps> {
             // eslint-disable-next-line react/jsx-no-bind
             onClick={this.save.bind(this, form)}
             // TODO: Need to disable if no services have been added to this workspace
-            disabled={isSaving}
+            disabled={isSaving || isDisabled}
           />
         </div>
       </div>

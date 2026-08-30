@@ -44,6 +44,11 @@ const messages = defineMessages({
     id: 'sidebar.addNewService',
     defaultMessage: 'Add new service',
   },
+  addNewServiceOffline: {
+    id: 'sidebar.addNewServiceOffline',
+    defaultMessage:
+      "Can't add new services while the Ferdium server is offline",
+  },
   splitModeToggle: {
     id: 'sidebar.splitModeToggle',
     defaultMessage: 'Split Mode Toggle',
@@ -189,6 +194,7 @@ class Sidebar extends Component<IProps, IState> {
     const { isMenuCollapsed } = stores!.settings.all.app;
 
     const { isDownloading, justFinishedDownloading } = stores!.app;
+    const isServerReachable = !stores!.requests.isWriteLocked;
 
     return (
       <div className="sidebar">
@@ -216,6 +222,7 @@ class Sidebar extends Component<IProps, IState> {
           clearCache={this.props.clearCache}
           hibernateService={this.props.hibernateService}
           wakeUpService={this.props.wakeUpService}
+          isServerConnected={stores!.requests.serverConnection === 'connected'}
         />
         {numberActiveButtons <= 1 || hideCollapseButton ? null : (
           <button
@@ -237,12 +244,20 @@ class Sidebar extends Component<IProps, IState> {
         {!hideRecipesButton && !isMenuCollapsed ? (
           <button
             type="button"
-            onClick={() => openSettings({ path: 'recipes' })}
-            className="sidebar__button sidebar__button--new-service"
+            onClick={() => {
+              if (isServerReachable) openSettings({ path: 'recipes' });
+            }}
+            className={`sidebar__button sidebar__button--new-service${
+              isServerReachable ? '' : ' sidebar__button--disabled'
+            }`}
             data-tooltip-id="tooltip-sidebar-button"
-            data-tooltip-content={`${intl.formatMessage(
-              messages.addNewService,
-            )} (${addNewServiceShortcutKey(false)})`}
+            data-tooltip-content={
+              isServerReachable
+                ? `${intl.formatMessage(messages.addNewService)} (${addNewServiceShortcutKey(
+                    false,
+                  )})`
+                : intl.formatMessage(messages.addNewServiceOffline)
+            }
           >
             <Icon icon={mdiPlusBox} size={1.5} />
           </button>

@@ -15,6 +15,8 @@ import TypedStore from './lib/TypedStore';
 
 const debug = require('../preload-safe-debug')('Ferdium:UserStore');
 
+const SERVICES_CACHE_KEY_PREFIX = 'ferdium-services-cache-v1';
+
 // TODO: split stores into UserStore and AuthStore
 export default class UserStore extends TypedStore {
   BASE_ROUTE: string = '/auth';
@@ -214,6 +216,14 @@ export default class UserStore extends TypedStore {
   }
 
   @action async _retrievePassword({ email }): Promise<void> {
+    if (!(await this.stores.requests._verifyServerWritable())) {
+      debug(
+        '_retrievePassword: blocked — server not available or account is offline-only',
+      );
+      this.actionStatus = ['error'];
+      return;
+    }
+
     const request = this.passwordRequest.execute(email);
 
     await request.promise;
@@ -221,6 +231,14 @@ export default class UserStore extends TypedStore {
   }
 
   @action async _invite({ invites }): Promise<void> {
+    if (!(await this.stores.requests._verifyServerWritable())) {
+      debug(
+        '_invite: blocked — server not available or account is offline-only',
+      );
+      this.actionStatus = ['error'];
+      return;
+    }
+
     const data = invites.filter(invite => invite.email !== '');
 
     const response = await this.inviteRequest.execute(data).promise;
@@ -236,10 +254,24 @@ export default class UserStore extends TypedStore {
   @action async _update({ userData }): Promise<void> {
     if (!this.isLoggedIn) return;
 
-    const response = await this.updateUserInfoRequest.execute(userData).promise;
+    if (!(await this.stores.requests._verifyServerWritable())) {
+      debug(
+        '_update: blocked — server not available or account is offline-only',
+      );
+      this.actionStatus = ['error'];
+      return;
+    }
 
-    this.getUserInfoRequest.patch(() => response.data);
-    this.actionStatus = response.status || [];
+    try {
+      const response =
+        await this.updateUserInfoRequest.execute(userData).promise;
+      // Patch local state ONLY after server succeeds
+      this.getUserInfoRequest.patch(() => response.data);
+      this.actionStatus = response.status || [];
+    } catch (error) {
+      debug('_update: server write failed', error);
+      this.actionStatus = ['error'];
+    }
   }
 
   @action _resetStatus(): void {
@@ -250,6 +282,7 @@ export default class UserStore extends TypedStore {
     // workaround mobx issue
     localStorage.removeItem('authToken');
     window.localStorage.removeItem('authToken');
+    this._clearServicesCache();
 
     this.getUserInfoRequest.invalidate().reset();
     this.authToken = null;
@@ -291,7 +324,18 @@ export default class UserStore extends TypedStore {
   }
 
   @action async _delete(): Promise<void> {
-    this.deleteAccountRequest.execute();
+    if (!(await this.stores.requests._verifyServerWritable())) {
+      debug(
+        '_delete: blocked — server not available or account is offline-only',
+      );
+      return;
+    }
+
+    try {
+      await this.deleteAccountRequest.execute().promise;
+    } catch (error) {
+      debug('_delete: server write failed', error);
+    }
   }
 
   // This is a mobx autorun which forces the user to login if not authenticated
@@ -394,6 +438,7 @@ export default class UserStore extends TypedStore {
   _setUserData(authToken: any): void {
     const data = this._parseToken(authToken);
     if (data !== false && data.authToken) {
+      this._clearServicesCache();
       localStorage.setItem('authToken', data.authToken);
 
       this.authToken = data.authToken;
@@ -402,6 +447,25 @@ export default class UserStore extends TypedStore {
       this.authToken = null;
       this.id = null;
     }
+  }
+
+  _clearServicesCache(): void {
+    const scopedCachePrefix = `${SERVICES_CACHE_KEY_PREFIX}:`;
+    const keysToRemove: string[] = [];
+    const totalKeys = window.localStorage.length;
+    for (let i = 0; i < totalKeys; i += 1) {
+      const key = window.localStorage.key(i);
+      if (
+        key &&
+        (key === SERVICES_CACHE_KEY_PREFIX || key.startsWith(scopedCachePrefix))
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+
+    keysToRemove.forEach(key => {
+      window.localStorage.removeItem(key);
+    });
   }
 
   getAuthURL(url: string): string {

@@ -6,6 +6,7 @@ import type { StoresProps } from '../../@types/ferdium-components.types';
 import Layout from '../../components/settings/SettingsLayout';
 import Navigation from '../../components/settings/navigation/SettingsNavigation';
 import ErrorBoundary from '../../components/util/ErrorBoundary';
+import { LOCAL_SERVER } from '../../config';
 import { workspaceStore } from '../../features/workspaces';
 
 interface IProps extends Partial<StoresProps> {}
@@ -28,6 +29,15 @@ class SettingsContainer extends Component<IProps> {
     if (this.portalRoot) {
       this.portalRoot.append(this.el);
     }
+
+    const { stores } = this.props;
+    const isRemoteAccount =
+      stores && stores.settings.all.app.server !== LOCAL_SERVER;
+
+    // Sync services immediately when settings modal opens
+    if (isRemoteAccount) {
+      stores!.services.syncFromServer();
+    }
   }
 
   componentWillUnmount(): void {
@@ -47,7 +57,12 @@ class SettingsContainer extends Component<IProps> {
 
     return ReactDOM.createPortal(
       <ErrorBoundary>
-        <Layout navigation={navigation} closeSettings={closeSettings}>
+        <Layout
+          navigation={navigation}
+          closeSettings={closeSettings}
+          serverConnection={stores!.requests.serverConnection}
+          hasPendingSyncConflict={stores!.services.hasPendingSyncConflict}
+        >
           <Outlet />
         </Layout>
       </ErrorBoundary>,

@@ -9,7 +9,15 @@ export default class ServicesApi {
   }
 
   all() {
+    return this.server.getCachedServices();
+  }
+
+  sync() {
     return this.server.getServices();
+  }
+
+  cacheFromModels(services: any[]) {
+    return this.server.cacheServicesFromModels(services);
   }
 
   create(recipeId: string, data: any) {

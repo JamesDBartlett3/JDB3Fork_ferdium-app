@@ -52,6 +52,7 @@ interface IProps extends WrappedComponentProps {
   embed?: boolean;
   isInviteSuccessful?: boolean;
   isLoadingInvite?: boolean;
+  isServerConnected?: boolean;
 }
 
 interface IState {
@@ -131,7 +132,10 @@ class Invite extends Component<IProps, IState> {
       embed = false,
       isInviteSuccessful = false,
       isLoadingInvite = false,
+      isServerConnected = true,
     } = this.props;
+
+    const isDisabled = !isServerConnected;
 
     const atLeastOneEmailAddress = form
       .$('invite')
@@ -145,6 +149,11 @@ class Invite extends Component<IProps, IState> {
 
     const renderForm = (
       <>
+        {isDisabled && embed && (
+          <Infobox type="warning" icon="alert-circle-outline">
+            Invitations are not available while server is offline
+          </Infobox>
+        )}
         {this.state.showSuccessInfo && isInviteSuccessful && (
           <Appear>
             <Infobox
@@ -157,7 +166,14 @@ class Invite extends Component<IProps, IState> {
           </Appear>
         )}
 
-        <form className="franz-form auth__form" onSubmit={e => this.submit(e)}>
+        <form
+          className="franz-form auth__form"
+          onSubmit={e => this.submit(e)}
+          style={{
+            opacity: isDisabled ? 0.6 : 1,
+            pointerEvents: isDisabled ? 'none' : 'auto',
+          }}
+        >
           {!embed && (
             <img src="./assets/images/logo.svg" className="auth__logo" alt="" />
           )}
@@ -167,15 +183,23 @@ class Invite extends Component<IProps, IState> {
           {form.$('invite').map(invite => (
             <div className="grid" key={invite.key}>
               <div className="grid__row">
-                <Input {...invite.$('name').bind()} showLabel={false} />
-                <Input {...invite.$('email').bind()} showLabel={false} />
+                <Input
+                  {...invite.$('name').bind()}
+                  showLabel={false}
+                  disabled={isDisabled}
+                />
+                <Input
+                  {...invite.$('email').bind()}
+                  showLabel={false}
+                  disabled={isDisabled}
+                />
               </div>
             </div>
           ))}
           <Button
             type="submit"
             className={sendButtonClassName}
-            disabled={!atLeastOneEmailAddress}
+            disabled={!atLeastOneEmailAddress || isDisabled}
             label={intl.formatMessage(messages.submitButtonLabel)}
             loaded={!isLoadingInvite}
             onClick={noop}

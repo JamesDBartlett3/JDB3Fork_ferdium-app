@@ -1,5 +1,6 @@
 /* eslint-disable import/no-import-module-exports */
 /* eslint-disable global-require */
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import {
   type PathOrFileDescriptor,
@@ -12,6 +13,7 @@ import {
   statSync,
   writeFileSync,
 } from 'fs-extra';
+import mobxLocalStorage from 'mobx-localstorage';
 import ms from 'ms';
 import tar from 'tar';
 
@@ -46,10 +48,20 @@ const debug = require('../../preload-safe-debug')('Ferdium:ServerApi');
 
 module.paths.unshift(getDevRecipeDirectory(), getRecipeDirectory());
 
+const SERVICES_CACHE_KEY_PREFIX = 'ferdium-services-cache-v1';
+const TOKEN_HASH_CACHE_MAX_SIZE = 5;
+
+interface ServiceCreatePayload {
+  iconFile?: any;
+  [key: string]: any;
+}
+
 export default class ServerApi {
   recipePreviews: IRecipePreview[] = [];
 
   recipes: IRecipe[] = [];
+
+  tokenHashCache = new Map<string, string>();
 
   // User
   async login(email: string, passwordHash: string) {
@@ -212,13 +224,78 @@ export default class ServerApi {
     }
     const data = await request.json();
 
-    const services = await this._mapServiceModels(data);
+    const resolvedServices = data;
+
+    this.setCachedServicesRaw(resolvedServices);
+
+    const services = await this._mapServiceModels(resolvedServices);
     const filteredServices = services.filter(service => !!service);
     debug('ServerApi::getServices resolves', filteredServices);
     return filteredServices;
   }
 
-  async createService(recipeId: string, data: { iconFile: any }) {
+  async getCachedServices() {
+    const data = this.getCachedServicesRaw();
+    if (data.length === 0) return [];
+    const services = await this._mapServiceModels(data);
+    return services.filter(service => !!service);
+  }
+
+  getCachedServicesRaw() {
+    const authToken = this._getAuthToken();
+    const cacheKey = this._getServicesCacheKey(authToken);
+    const legacyCacheKey = this._getLegacyServicesCacheKey(authToken);
+    const scopedCachedValue = window.localStorage.getItem(cacheKey);
+    const legacyCachedValue = window.localStorage.getItem(legacyCacheKey);
+
+    try {
+      const cachedValue = this._selectCachedServicesValue(
+        scopedCachedValue,
+        legacyCachedValue,
+      );
+      const parsed = JSON.parse(cachedValue);
+
+      if (Array.isArray(parsed)) {
+        // Migrate old token-scoped key to hashed token key once data is read.
+        if (
+          cacheKey !== legacyCacheKey &&
+          !scopedCachedValue &&
+          legacyCachedValue
+        ) {
+          window.localStorage.setItem(cacheKey, JSON.stringify(parsed));
+          window.localStorage.removeItem(legacyCacheKey);
+        }
+        return parsed;
+      }
+
+      debug('ServerApi::getCachedServicesRaw invalid cache format, resetting');
+      [...new Set([cacheKey, legacyCacheKey])].forEach(key =>
+        window.localStorage.removeItem(key),
+      );
+      return [];
+    } catch (error) {
+      debug('ServerApi::getCachedServicesRaw parse error', error);
+      [
+        ...new Set([SERVICES_CACHE_KEY_PREFIX, cacheKey, legacyCacheKey]),
+      ].forEach(key => window.localStorage.removeItem(key));
+      return [];
+    }
+  }
+
+  setCachedServicesRaw(services: any[]) {
+    window.localStorage.setItem(
+      this._getServicesCacheKey(),
+      JSON.stringify(services),
+    );
+  }
+
+  cacheServicesFromModels(services: ServiceModel[]) {
+    this.setCachedServicesRaw(
+      services.map(service => this._extractServiceConfig(service)),
+    );
+  }
+
+  async createService(recipeId: string, data: ServiceCreatePayload) {
     const request = await sendAuthRequest(`${apiBase()}/service`, {
       method: 'POST',
       body: JSON.stringify({ recipeId, ...data }),
@@ -568,6 +645,40 @@ export default class ServerApi {
     ).catch(error => console.error("Can't load recipe", error));
   }
 
+  _extractServiceConfig(service: any) {
+    const recipeId = service.recipe?.id ?? service.recipeId;
+
+    return {
+      id: service.id,
+      recipeId,
+      name: service.name,
+      order: service.order,
+      team: service.team,
+      customUrl: service.customUrl,
+      iconUrl: service.iconUrl,
+      useFavicon: service.useFavicon,
+      isEnabled: service.isEnabled,
+      isNotificationEnabled: service.isNotificationEnabled,
+      isBadgeEnabled: service.isBadgeEnabled,
+      isMediaBadgeEnabled: service.isMediaBadgeEnabled,
+      trapLinkClicks: service.trapLinkClicks,
+      isIndirectMessageBadgeEnabled: service.isIndirectMessageBadgeEnabled,
+      isMuted: service.isMuted,
+      isDarkModeEnabled: service.isDarkModeEnabled,
+      darkReaderSettings: service.darkReaderSettings,
+      isProgressbarEnabled: service.isProgressbarEnabled,
+      spellcheckerLanguage: service.spellcheckerLanguage,
+      userAgentPref: service.userAgentPref,
+      isHibernationEnabled: service.isHibernationEnabled,
+      isWakeUpEnabled: service.isWakeUpEnabled,
+      onlyShowFavoritesInUnreadCount: service.onlyShowFavoritesInUnreadCount,
+      proxy: service.proxy,
+      customIconUrl: service.customIconUrl,
+      hasCustomUploadedIcon: service.hasCustomUploadedIcon,
+      updatedAt: service.updatedAt ?? null,
+    };
+  }
+
   _mapRecipePreviewModel(recipes: IRecipePreview[]) {
     return recipes
       .map(recipe => {
@@ -619,5 +730,53 @@ export default class ServerApi {
       debug('Could not load dev recipes');
       return false;
     }
+  }
+
+  _getAuthToken() {
+    return (
+      mobxLocalStorage.getItem('authToken') ||
+      window.localStorage.getItem('authToken')
+    );
+  }
+
+  _getServicesCacheKey(authToken = this._getAuthToken()) {
+    if (!authToken) {
+      return SERVICES_CACHE_KEY_PREFIX;
+    }
+
+    let tokenHash = this.tokenHashCache.get(authToken);
+
+    if (tokenHash) {
+      this.tokenHashCache.delete(authToken);
+      this.tokenHashCache.set(authToken, tokenHash);
+    } else {
+      if (this.tokenHashCache.size >= TOKEN_HASH_CACHE_MAX_SIZE) {
+        const oldestToken = this.tokenHashCache.keys().next().value;
+        if (oldestToken) {
+          this.tokenHashCache.delete(oldestToken);
+        }
+      }
+      tokenHash = createHash('sha256')
+        .update(`${SERVICES_CACHE_KEY_PREFIX}:${authToken}`)
+        .digest('hex');
+      this.tokenHashCache.set(authToken, tokenHash);
+    }
+
+    return `${SERVICES_CACHE_KEY_PREFIX}:${tokenHash}`;
+  }
+
+  _getLegacyServicesCacheKey(authToken = this._getAuthToken()) {
+    if (!authToken) {
+      return SERVICES_CACHE_KEY_PREFIX;
+    }
+
+    return `${SERVICES_CACHE_KEY_PREFIX}:${authToken}`;
+  }
+
+  _selectCachedServicesValue(
+    scopedCachedValue: string | null,
+    legacyCachedValue: string | null,
+  ) {
+    return scopedCachedValue || legacyCachedValue || '[]';
   }
 }

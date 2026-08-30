@@ -1,14 +1,25 @@
-import { readJsonSync } from 'fs-extra';
+import { readJson } from 'fs-extra';
 import { type IReactionDisposer, autorun } from 'mobx';
 import { inject, observer } from 'mobx-react';
 import { Component, type ReactElement } from 'react';
+import {
+  type WrappedComponentProps,
+  defineMessages,
+  injectIntl,
+} from 'react-intl';
 
 import type { Params } from 'react-router-dom';
 import type { StoresProps } from '../../@types/ferdium-components.types';
 import RecipesDashboard from '../../components/settings/recipes/RecipesDashboard';
+import { H1 } from '../../components/ui/headline';
+import Infobox from '../../components/ui/infobox/index';
 import ErrorBoundary from '../../components/util/ErrorBoundary';
 import withParams from '../../components/util/WithParams';
-import { CUSTOM_WEBSITE_RECIPE_ID, FERDIUM_DEV_DOCS } from '../../config';
+import {
+  CUSTOM_WEBSITE_RECIPE_ID,
+  FERDIUM_DEV_DOCS,
+  LOCAL_SERVER,
+} from '../../config';
 import { userDataRecipesPath } from '../../environment-remote';
 import { communityRecipesStore } from '../../features/communityRecipes';
 import { asarRecipesPath } from '../../helpers/asar-helpers';
@@ -16,9 +27,25 @@ import { openPath } from '../../helpers/url-helpers';
 import type Recipe from '../../models/Recipe';
 import RecipePreview from '../../models/RecipePreview';
 
-interface IProps extends Partial<StoresProps> {
+interface IProps extends Partial<StoresProps>, WrappedComponentProps {
   params: Params;
 }
+
+const messages = defineMessages({
+  headline: {
+    id: 'settings.recipes.headline',
+    defaultMessage: 'Available services',
+  },
+  offline: {
+    id: 'settings.recipes.offline',
+    defaultMessage:
+      "Can't add new services while the Ferdium server is offline. Please try again when the connection is restored.",
+  },
+  connecting: {
+    id: 'settings.recipes.connecting',
+    defaultMessage: 'Connecting to server...',
+  },
+});
 
 interface IState {
   needle: string | null;
@@ -35,7 +62,6 @@ class RecipesScreen extends Component<IProps, IState> {
   constructor(props: IProps) {
     super(props);
 
-    this.customRecipes = readJsonSync(asarRecipesPath('all.json'));
     this.state = {
       needle: null,
       currentFilter: 'featured',
@@ -43,6 +69,20 @@ class RecipesScreen extends Component<IProps, IState> {
   }
 
   componentDidMount(): void {
+    // Load custom recipes asynchronously to prevent blocking the UI
+    readJson(asarRecipesPath('all.json'))
+      .then(recipes => {
+        this.customRecipes = recipes;
+        // Trigger a re-render if we're on the 'all' filter and recipes were loaded
+        if (this.state.currentFilter === 'all') {
+          this.forceUpdate();
+        }
+      })
+      .catch(error => {
+        console.error('Failed to load custom recipes:', error);
+        this.customRecipes = [];
+      });
+
     this.autorunDisposer = autorun(() => {
       const { filter } = this.props.params;
       const { currentFilter } = this.state;
@@ -109,7 +149,8 @@ class RecipesScreen extends Component<IProps, IState> {
   }
 
   render(): ReactElement {
-    const { recipePreviews, recipes, services } = this.props.stores!;
+    const { recipePreviews, recipes, services, requests, settings } =
+      this.props.stores!;
     const { app: appActions, service: serviceActions } = this.props.actions!;
     const filter = this.state.currentFilter;
 
@@ -158,6 +199,28 @@ class RecipesScreen extends Component<IProps, IState> {
 
     const recipeDirectory = userDataRecipesPath('dev');
 
+    // Determine if this is a remote-synced account
+    const isRemoteAccount = settings.all.app.server !== LOCAL_SERVER;
+
+    // For remote accounts that are offline, show offline warning
+    if (isRemoteAccount && requests.serverConnection === 'disconnected') {
+      return (
+        <ErrorBoundary>
+          <div className="settings__main">
+            <div className="settings__header">
+              <H1>{this.props.intl.formatMessage(messages.headline)}</H1>
+            </div>
+            <div className="settings__body">
+              <Infobox type="warning" icon="alert-circle-outline">
+                {this.props.intl.formatMessage(messages.offline)}
+              </Infobox>
+            </div>
+          </div>
+        </ErrorBoundary>
+      );
+    }
+
+    // Server is connected or this is a local-only account — show recipes normally
     return (
       <ErrorBoundary>
         <RecipesDashboard
@@ -178,10 +241,12 @@ class RecipesScreen extends Component<IProps, IState> {
           openDevDocs={() =>
             appActions.openExternalUrl({ url: FERDIUM_DEV_DOCS })
           }
+          isServerReachable={requests.serverConnection === 'connected'}
+          hasPendingSyncConflict={services.hasPendingSyncConflict}
         />
       </ErrorBoundary>
     );
   }
 }
 
-export default withParams(RecipesScreen);
+export default withParams(injectIntl(RecipesScreen));

@@ -90,4 +90,19 @@
     transform: rotateZ(45deg);
     width: 50px;
   }
+
+  // Visible-but-disabled state: greyed out, non-interactive, with a hover
+  // tooltip explaining why. We deliberately keep `pointer-events: auto` (the
+  // default) so react-tooltip can still receive hover events; the click is
+  // suppressed in the component via the `disabled` prop guard.
+  &--disabled {
+    cursor: not-allowed;
+    filter: grayscale(100%);
+    opacity: 0.3;
+
+    &:hover {
+      // Keep the greyed-out look on hover instead of the normal highlight.
+      background-color: $theme-gray-lightest;
+    }
+  }
 }

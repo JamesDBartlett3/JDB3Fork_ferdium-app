@@ -178,13 +178,17 @@ interface RecipeStore extends TypedStore {
 interface RequestsStore extends TypedStore {
   localServerPort: number;
   localServerToken: string | undefined;
-  retries: number;
-  retryDelay: number;
-  servicesRequest: () => void;
-  showRequiredRequestsError: () => void;
-  userInfoRequest: () => void;
-  areRequiredRequestsLoading: () => void;
-  areRequiredRequestsSuccessful: () => void;
+  syncServicesRequest: Request;
+  servicesRequest: CachedRequest;
+  userInfoRequest: CachedRequest;
+  serverConnection: 'connected' | 'connecting' | 'disconnected';
+  connectionDisplayState: 'connected' | 'connecting' | 'disconnected';
+  isWriteLocked: boolean;
+  areRequiredRequestsLoading: boolean;
+  _checkServerConnection: () => void;
+  _triggerServerSync: () => void;
+  _verifyServerWritable: () => Promise<boolean>;
+  _flushPendingWritesThenSync: () => void;
 }
 
 interface RouterStore {
@@ -211,6 +215,7 @@ interface ServicesStore extends TypedStore {
   createServiceRequest: CachedRequest;
   deleteServiceRequest: () => void;
   allServicesRequest: CachedRequest;
+  syncServicesRequest: Request;
   filterNeedle: string;
   lastUsedServices: () => void;
   reorderServicesRequest: () => void;
@@ -225,6 +230,13 @@ interface ServicesStore extends TypedStore {
   filtered: () => void;
   isTodosServiceActive: () => void;
   isTodosServiceAdded: () => void;
+  syncFromServer: () => Promise<void>;
+  hasPendingSyncConflict: boolean;
+  hasPendingWrites: boolean;
+  applyPendingServerSync: () => Promise<void>;
+  dismissPendingServerSync: () => void;
+  _syncFromServer: () => Promise<void>;
+  _flushPendingWrites: () => Promise<void>;
 }
 
 // TODO: Create actual type based on the default config in config.ts
