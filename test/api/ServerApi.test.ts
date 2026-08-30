@@ -29,6 +29,9 @@ jest.mock('../../src/helpers/recipe-helpers', () => ({
 }));
 
 jest.mock('../../src/environment-remote', () => ({
+  userDataPath: jest.fn((...segments: string[]) =>
+    ['/tmp/user-data', ...segments].join('/'),
+  ),
   userDataRecipesPath: jest.fn(() => '/tmp/recipes'),
 }));
 

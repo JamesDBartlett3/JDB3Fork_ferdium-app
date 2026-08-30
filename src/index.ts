@@ -13,6 +13,7 @@ import {
 } from 'electron';
 
 import { initialize } from 'electron-react-titlebar/main';
+import { setupWebAuthn } from 'electron-webauthn-linux';
 import windowStateKeeper from 'electron-window-state';
 import { emptyDirSync, ensureFileSync } from 'fs-extra';
 import minimist from 'minimist';
@@ -38,7 +39,7 @@ import {
 import { ifUndefined } from './jsUtils';
 
 import Settings from './electron/Settings';
-import handleDeepLink from './electron/deepLinking';
+import handleDeepLink, { getDeepLinkFromArgs } from './electron/deepLinking';
 import './electron/exception';
 // eslint-disable-next-line import/no-cycle
 import ipcApi from './electron/ipc-api';
@@ -105,6 +106,40 @@ const shortcutSettings = new Settings('shortcuts', DEFAULT_SHORTCUTS);
 const retrieveSettingValue = (key: string, defaultValue: boolean | string) =>
   ifUndefined<boolean | string>(settings.get(key), defaultValue);
 
+const normalizeAppSettings = (): void => {
+  if (isMac || settings.get('enableSystemTray') !== false) {
+    return;
+  }
+
+  const normalizedSettings: Partial<typeof DEFAULT_APP_SETTINGS> = {};
+
+  if (settings.get('runInBackground') !== false) {
+    normalizedSettings.runInBackground = false;
+  }
+
+  if (settings.get('startMinimized') !== false) {
+    normalizedSettings.startMinimized = false;
+  }
+
+  if (settings.get('minimizeToSystemTray') !== false) {
+    normalizedSettings.minimizeToSystemTray = false;
+  }
+
+  if (settings.get('closeToSystemTray') !== false) {
+    normalizedSettings.closeToSystemTray = false;
+  }
+
+  if (Object.keys(normalizedSettings).length > 0) {
+    debug(
+      'Normalizing app settings for disabled system tray',
+      normalizedSettings,
+    );
+    settings.set(normalizedSettings);
+  }
+};
+
+normalizeAppSettings();
+
 // TODO: Commenting out sentry to fix https://github.com/ferdium/ferdium-app/issues/814
 // if (retrieveSettingValue('sentry', DEFAULT_APP_SETTINGS.sentry)) {
 //   // eslint-disable-next-line global-require
@@ -135,8 +170,11 @@ if (gotTheLock) {
       if (isWindows) {
         onDidLoad((window: BrowserWindow) => {
           // Keep only command line / deep linked arguments
-          const url = argv.slice(1);
-          handleDeepLink(window, url.toString());
+          const deepLink = getDeepLinkFromArgs(argv);
+
+          if (deepLink) {
+            handleDeepLink(window, deepLink);
+          }
 
           if (argv.includes('--reset-window')) {
             // Needs to be delayed to not interfere with mainWindow.restore();
@@ -185,6 +223,9 @@ const webRTCIPHandlingPolicy = retrieveSettingValue(
   | 'default'
   | 'default_public_interface_only'
   | 'default_public_and_private_interfaces';
+
+const windowOpenFeaturesRequestResizable = (features = ''): boolean =>
+  /(?:^|,)\s*resizable(?:=(?:yes|1|true))?(?:,|$)/i.test(features);
 
 const createWindow = () => {
   // Remember window size
@@ -259,8 +300,9 @@ const createWindow = () => {
       enableWebContents(contents);
 
       // Set permission handlers on service webview sessions.
-      // This explicitly allows safe permissions and denies unknown ones,
-      // and enables HID/USB/Serial for hardware FIDO2 security key detection.
+      // setPermissionRequestHandler allows safe permissions and denies unknown ones.
+      // setPermissionCheckHandler additionally allows hid/serial/usb feature detection
+      // (actual device access is gated by select-hid-device/select-usb-device events).
       const ses = contents.session;
       if (!(ses as any)._permissionHandlersSet) {
         (ses as any)._permissionHandlersSet = true;
@@ -309,7 +351,7 @@ const createWindow = () => {
         });
       }
 
-      contents.setWindowOpenHandler(({ url, disposition }) => {
+      contents.setWindowOpenHandler(({ url, disposition, features }) => {
         // OAuth popups (Google, Microsoft, etc.) are opened via window.open()
         // and need window.opener preserved so the parent can receive the
         // postMessage callback that completes the flow. Allow them as a child
@@ -321,11 +363,22 @@ const createWindow = () => {
             overrideBrowserWindowOptions: {
               parent: mainWindow,
               fullscreenable: false,
-              webPreferences: { session: contents.session },
+              resizable: windowOpenFeaturesRequestResizable(features),
+              webPreferences: isLinux
+                ? {
+                    session: contents.session,
+                    preload: join(
+                      __dirname,
+                      'webview',
+                      'webauthn-popup-preload.js',
+                    ),
+                    contextIsolation: true,
+                    sandbox: true,
+                  }
+                : { session: contents.session },
             },
           };
         }
-
         // Regular link clicks → open in the user's default browser.
         openExternalUrl(url);
         return { action: 'deny' };
@@ -335,7 +388,6 @@ const createWindow = () => {
         enableWebContents(child.webContents);
         child.webContents.setWebRTCIPHandlingPolicy(webRTCIPHandlingPolicy);
       });
-
       // Handle will download event from main process (prevent download dialog)
       contents.session.on('will-download', (_e, item) => {
         const downloadFolderPath = retrieveSettingValue(
@@ -395,8 +447,11 @@ const createWindow = () => {
   // Windows deep linking handling on app launch
   if (isWindows) {
     onDidLoad((window: BrowserWindow) => {
-      const url = process.argv.slice(1);
-      handleDeepLink(window, url.toString());
+      const deepLink = getDeepLinkFromArgs(process.argv);
+
+      if (deepLink) {
+        handleDeepLink(window, deepLink);
+      }
     });
   }
 
@@ -429,8 +484,9 @@ const createWindow = () => {
         }
       } else if (isMac && mainWindow?.isFullScreen()) {
         debug('Window: leaveFullScreen and hide');
-        mainWindow.once('show', () => mainWindow?.setFullScreen(true));
-        mainWindow.once('leave-full-screen', () => mainWindow?.hide());
+        mainWindow.once('leave-full-screen', () => {
+          mainWindow?.hide();
+        });
         mainWindow.setFullScreen(false);
       } else {
         debug('Window: hide');
@@ -604,6 +660,16 @@ app.on('ready', () => {
   }
 
   initialize();
+
+  // Initialize WebAuthn/passkey support on Linux
+  if (isLinux) {
+    setupWebAuthn({
+      storagePath: userDataPath(),
+      enableHardwareKeys: true,
+    }).catch(error => {
+      debug('WebAuthn setup failed:', error.message);
+    });
+  }
 
   createWindow();
 });
@@ -888,9 +954,18 @@ app.on('activate', () => {
 });
 
 app.on('web-contents-created', (_createdEvent, contents) => {
-  contents.setWindowOpenHandler(({ disposition }) =>
-    disposition === 'foreground-tab' ? { action: 'deny' } : { action: 'allow' },
-  );
+  contents.setWindowOpenHandler(({ disposition, features }) => {
+    if (disposition === 'foreground-tab') {
+      return { action: 'deny' };
+    }
+
+    return {
+      action: 'allow',
+      overrideBrowserWindowOptions: {
+        resizable: windowOpenFeaturesRequestResizable(features),
+      },
+    };
+  });
 });
 
 app.on('will-finish-launching', () => {

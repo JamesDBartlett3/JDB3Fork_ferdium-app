@@ -4102,7 +4102,7 @@
         }
       },
       {
-        "defaultMessage": "!!!Always show Ferdium in System Tray",
+        "defaultMessage": "!!!Show Ferdium in System Tray",
         "end": {
           "column": 3,
           "line": 49
@@ -4115,7 +4115,7 @@
         }
       },
       {
-        "defaultMessage": "!!!Always show Ferdium in Menu Bar",
+        "defaultMessage": "!!!Show Ferdium in Menu Bar",
         "end": {
           "column": 3,
           "line": 53

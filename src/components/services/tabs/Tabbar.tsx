@@ -105,7 +105,7 @@ class TabBar extends Component<IProps> {
     const axis = useHorizontalStyle ? 'x' : 'y';
 
     return (
-      <div>
+      <div className="sidebar__services">
         <TabBarSortableList
           // @ts-expect-error Fix me
           services={services}
@@ -131,6 +131,7 @@ class TabBar extends Component<IProps> {
           showMessageBadgeWhenMutedSetting={showMessageBadgeWhenMutedSetting}
           showServiceNameSetting={showServiceNameSetting}
           showMessageBadgesEvenWhenMuted={showMessageBadgesEvenWhenMuted}
+          useHorizontalStyle={useHorizontalStyle}
         />
       </div>
     );
