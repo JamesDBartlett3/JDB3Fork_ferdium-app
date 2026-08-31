@@ -46,7 +46,7 @@ jobs:
         with:
           ref: develop
           submodules: recursive
-          fetch-depth: 0 # Note: Needed to be able to pull the 'develop' branch as well for merging
+          fetch-depth: 0 # Note: Needed so both 'develop' and 'nightly' history can be used during branch setup/rebase
       - name: Use Node.js specified in the '.nvmrc' file
         uses: actions/setup-node@v4
         if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && contains(github.event.inputs.message, '[nightly branch]')) }}
