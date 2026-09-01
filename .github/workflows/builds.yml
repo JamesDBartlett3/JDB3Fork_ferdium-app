@@ -91,7 +91,7 @@ jobs:
           if [ "$NIGHTLY_EXISTS" = "false" ]; then
             CHANGES_COUNT=1
           else
-            CHANGES_COUNT=$(git log @{u}.. | wc -l)
+            CHANGES_COUNT=$(git log origin/nightly.. | wc -l)
           fi
           MANUAL_REBUILD="${{ github.event_name == 'workflow_dispatch' }}"
           VERSION_BUMP="${{ contains(github.event.inputs.message, '[version bump]') }}"
